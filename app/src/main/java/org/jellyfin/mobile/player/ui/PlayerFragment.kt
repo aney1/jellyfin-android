@@ -109,6 +109,8 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             val isPlaying = viewModel.playerOrNull?.isPlaying == true
             requireActivity().window.keepScreenOn = isPlaying
             loadingIndicator.isVisible = playerState == Player.STATE_BUFFERING
+            // Keep the auto-enter Picture-in-Picture state in sync with playback
+            updatePictureInPictureParams()
         }
         viewModel.decoderType.observe(this) { type ->
             playerMenus?.updatedSelectedDecoder(type)
@@ -129,6 +131,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             // Update title and player menus
             toolbarTitle.text = mediaSource.getName(requireContext())
             playerMenus?.onQueueItemChanged(mediaSource, viewModel.queueManager.hasNext())
+
+            // Refresh the Picture-in-Picture aspect ratio for the new media source
+            updatePictureInPictureParams()
         }
 
         // Handle fragment arguments, extract playback options and start playback
@@ -237,6 +242,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         if (viewModel.playerOrNull == null) {
             parentFragmentManager.popBackStack()
         }
+
+        // Re-enable auto-enter Picture-in-Picture now that the player is in the foreground again
+        updatePictureInPictureParams()
     }
 
     /**
@@ -367,32 +375,74 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     fun onUserLeaveHint() {
-        if (AndroidVersion.isAtLeastN && viewModel.playerOrNull != null) {
+        // On Android 12+ (API 31+), Picture-in-Picture is entered automatically through
+        // setAutoEnterEnabled (see updatePictureInPictureParams). This reliably works with
+        // gesture navigation, where onUserLeaveHint is not guaranteed to be called.
+        // Only enter manually on older versions that don't support auto-enter.
+        if (AndroidVersion.isAtLeastN && !AndroidVersion.isAtLeastS && viewModel.playerOrNull?.isPlaying == true) {
             requireActivity().enterPictureInPicture()
         }
     }
 
-    @Suppress("NestedBlockDepth")
+    /**
+     * Build the [PictureInPictureParams] describing the current video.
+     *
+     * @param autoEnter whether the system should automatically enter Picture-in-Picture mode
+     * when the user navigates away (API 31+ only). This is what makes PiP work with
+     * gesture navigation, where [onUserLeaveHint] is unreliable.
+     */
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun createPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams =
+        PictureInPictureParams.Builder().apply {
+            val aspectRational = currentVideoStream?.aspectRational?.let { aspectRational ->
+                when {
+                    aspectRational < PIP_MIN_RATIONAL -> PIP_MIN_RATIONAL
+                    aspectRational > PIP_MAX_RATIONAL -> PIP_MAX_RATIONAL
+                    else -> aspectRational
+                }
+            }
+            setAspectRatio(aspectRational)
+            val contentFrame: View = playerView.findViewById(Media3R.id.exo_content_frame)
+            val contentRect = with(contentFrame) {
+                val (x, y) = intArrayOf(0, 0).also(::getLocationInWindow)
+                Rect(x, y, x + width, y + height)
+            }
+            setSourceRectHint(contentRect)
+            if (AndroidVersion.isAtLeastS) {
+                setAutoEnterEnabled(autoEnter)
+            }
+        }.build()
+
+    /**
+     * Keep the activity's [PictureInPictureParams] up to date so the system can automatically
+     * enter Picture-in-Picture mode when playing. Auto-enter is only available on API 31+ and,
+     * unlike [onUserLeaveHint], works regardless of the device's navigation mode.
+     */
+    private fun updatePictureInPictureParams() {
+        if (!AndroidVersion.isAtLeastS || _playerBinding == null) return
+        // Only auto-enter for an actually playing video. Without the video stream check,
+        // audio-only playback (handled by the background service) would also trigger PiP.
+        val shouldAutoEnter = currentVideoStream != null && viewModel.playerOrNull?.isPlaying == true
+        requireActivity().setPictureInPictureParams(createPictureInPictureParams(autoEnter = shouldAutoEnter))
+    }
+
+    /**
+     * Disable auto-enter Picture-in-Picture at the activity level. The [PictureInPictureParams]
+     * are set on the activity and persist across fragments, so they must be cleared when the
+     * player is no longer the foreground surface. Otherwise the app would enter PiP when leaving
+     * any other screen.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun disableAutoEnterPictureInPicture() {
+        requireActivity().setPictureInPictureParams(
+            PictureInPictureParams.Builder().setAutoEnterEnabled(false).build(),
+        )
+    }
+
     @RequiresApi(Build.VERSION_CODES.N)
     private fun Activity.enterPictureInPicture() {
         if (AndroidVersion.isAtLeastO) {
-            val params = PictureInPictureParams.Builder().apply {
-                val aspectRational = currentVideoStream?.aspectRational?.let { aspectRational ->
-                    when {
-                        aspectRational < PIP_MIN_RATIONAL -> PIP_MIN_RATIONAL
-                        aspectRational > PIP_MAX_RATIONAL -> PIP_MAX_RATIONAL
-                        else -> aspectRational
-                    }
-                }
-                setAspectRatio(aspectRational)
-                val contentFrame: View = playerView.findViewById(Media3R.id.exo_content_frame)
-                val contentRect = with(contentFrame) {
-                    val (x, y) = intArrayOf(0, 0).also(::getLocationInWindow)
-                    Rect(x, y, x + width, y + height)
-                }
-                setSourceRectHint(contentRect)
-            }.build()
-            enterPictureInPictureMode(params)
+            enterPictureInPictureMode(createPictureInPictureParams(autoEnter = false))
         } else {
             @Suppress("DEPRECATION")
             enterPictureInPictureMode()
@@ -418,6 +468,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     override fun onStop() {
         super.onStop()
         orientationListener.disable()
+
+        // The player is no longer in the foreground, so the activity must not auto-enter PiP
+        // until the player is resumed (see updatePictureInPictureParams in onResume).
+        if (AndroidVersion.isAtLeastS && requireActivity().isInPictureInPictureMode.not()) {
+            disableAutoEnterPictureInPicture()
+        }
     }
 
     override fun onDestroyView() {
