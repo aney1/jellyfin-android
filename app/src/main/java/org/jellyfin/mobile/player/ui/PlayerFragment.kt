@@ -53,6 +53,7 @@ import org.jellyfin.sdk.model.api.MediaStream
 import org.koin.android.ext.android.inject
 import com.google.android.exoplayer2.ui.R as ExoplayerR
 
+@Suppress("TooManyFunctions")
 class PlayerFragment : Fragment(), BackPressInterceptor {
     private val appPreferences: AppPreferences by inject()
     private val viewModel: PlayerViewModel by viewModels()

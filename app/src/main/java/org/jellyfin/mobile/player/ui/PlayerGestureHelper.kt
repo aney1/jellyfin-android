@@ -143,6 +143,7 @@ class PlayerGestureHelper(
                 return true
             }
 
+            @Suppress("ReturnCount")
             override fun onScroll(
                 firstEvent: MotionEvent?,
                 currentEvent: MotionEvent,
@@ -257,7 +258,7 @@ class PlayerGestureHelper(
     private fun determineSwipeGestureRegion(swipeX: Int, allowFullscreenSwipe: Boolean): SwipeGestureRegion {
         val viewWidth = playerView.measuredWidth
         return if (allowFullscreenSwipe) {
-            val regionWidth = viewWidth / 3
+            val regionWidth = viewWidth / FULLSCREEN_SWIPE_REGION_COUNT
             when {
                 swipeX < regionWidth -> SwipeGestureRegion.BRIGHTNESS
                 swipeX > viewWidth - regionWidth -> SwipeGestureRegion.VOLUME
@@ -362,5 +363,13 @@ class PlayerGestureHelper(
         BRIGHTNESS,
         VOLUME,
         FULLSCREEN,
+    }
+
+    companion object {
+        /**
+         * Number of equal-width vertical regions the player is split into when the fullscreen
+         * swipe gesture is enabled: brightness (left), fullscreen toggle (center), volume (right).
+         */
+        private const val FULLSCREEN_SWIPE_REGION_COUNT = 3
     }
 }
