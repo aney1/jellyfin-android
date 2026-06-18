@@ -38,16 +38,21 @@ import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.interaction.PlayerLifecycleObserver
 import org.jellyfin.mobile.player.interaction.PlayerMediaSessionCallback
 import org.jellyfin.mobile.player.interaction.PlayerNotificationHelper
+import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
+import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.queue.QueueManager
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.player.ui.DecoderType
 import org.jellyfin.mobile.player.ui.DisplayPreferences
 import org.jellyfin.mobile.player.ui.PlayState
+import org.jellyfin.mobile.player.ui.SkipMediaSegmentButton
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.Constants.SUPPORTED_VIDEO_PLAYER_PLAYBACK_ACTIONS
 import org.jellyfin.mobile.utils.applyDefaultAudioAttributes
 import org.jellyfin.mobile.utils.applyDefaultLocalAudioAttributes
+import org.jellyfin.mobile.utils.extensions.end
 import org.jellyfin.mobile.utils.extensions.scaleInRange
+import org.jellyfin.mobile.utils.extensions.start
 import org.jellyfin.mobile.utils.extensions.width
 import org.jellyfin.mobile.utils.getVolumeLevelPercent
 import org.jellyfin.mobile.utils.getVolumeRange
@@ -63,6 +68,7 @@ import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.operations.DisplayPreferencesApi
 import org.jellyfin.sdk.api.operations.HlsSegmentApi
 import org.jellyfin.sdk.api.operations.PlayStateApi
+import org.jellyfin.sdk.model.api.MediaSegmentDto
 import org.jellyfin.sdk.model.api.PlayMethod
 import org.jellyfin.sdk.model.api.PlaybackOrder
 import org.jellyfin.sdk.model.api.PlaybackProgressInfo
@@ -75,6 +81,7 @@ import org.koin.core.component.inject
 import org.koin.core.qualifier.named
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 
 @Suppress("TooManyFunctions")
 class PlayerViewModel(application: Application) : AndroidViewModel(application), KoinComponent, Player.Listener {
@@ -93,6 +100,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     val queueManager = QueueManager(this)
     val mediaSourceOrNull: JellyfinMediaSource?
         get() = queueManager.currentMediaSourceOrNull
+    private val mediaSegmentRepository: MediaSegmentRepository by inject()
 
     // ExoPlayer
     private val _player = MutableLiveData<ExoPlayer?>()
@@ -111,6 +119,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     private var fallbackPreferExtensionRenderers = false
 
     private var progressUpdateJob: Job? = null
+    private var skipMediaSegmentUpdateJob: Job? = null
+
+    // Media Segments Ask to Skip
+    private var askToSkipMediaSegments: List<MediaSegmentDto> = emptyList()
+    private var skipMediaSegmentButton: SkipMediaSegmentButton? = null
 
     /**
      * Returns the current ExoPlayer instance or null
@@ -251,6 +264,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
         val startTime = jellyfinMediaSource.startTimeMs
         if (startTime > 0) player.seekTo(startTime)
+
+        applyMediaSegments(jellyfinMediaSource)
+
         player.playWhenReady = playWhenReady
 
         mediaSession.setMetadata(jellyfinMediaSource.toMediaMetadata())
@@ -271,6 +287,70 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     private fun stopProgressUpdates() {
         progressUpdateJob?.cancel()
+    }
+
+    private fun startSkipMediaSegmentUpdates() {
+        skipMediaSegmentUpdateJob = viewModelScope.launch {
+            while (true) {
+                delay(Constants.SKIP_MEDIA_SEGMENT_UPDATE_DELAY)
+                playerOrNull?.updateSkipMediaSegmentButton()
+            }
+        }
+    }
+
+    private fun stopSkipMediaSegmentUpdates() {
+        skipMediaSegmentUpdateJob?.cancel()
+    }
+
+    private fun Player.updateSkipMediaSegmentButton() {
+        val mediaSegments = askToSkipMediaSegments
+        if (mediaSegments.isEmpty()) return
+
+        val playbackPosition = currentPosition.milliseconds
+        val currentMediaSegment = mediaSegments.find { seg -> playbackPosition in seg.start..seg.end }
+        if (currentMediaSegment != null) {
+            skipMediaSegmentButton?.showSkipSegmentButton(currentMediaSegment)
+        } else {
+            skipMediaSegmentButton?.hideSkipSegmentButton()
+        }
+    }
+
+    private fun applyMediaSegments(jellyfinMediaSource: JellyfinMediaSource) {
+        askToSkipMediaSegments = emptyList()
+
+        viewModelScope.launch {
+            if (jellyfinMediaSource.item != null) {
+                val mediaSegments = mediaSegmentRepository.getSegmentsForItem(jellyfinMediaSource.item)
+                val newAskToSkipMediaSegments = mutableListOf<MediaSegmentDto>()
+
+                for (mediaSegment in mediaSegments) {
+                    val action = mediaSegmentRepository.getMediaSegmentAction(mediaSegment)
+
+                    when (action) {
+                        MediaSegmentAction.SKIP -> addSkipAction(mediaSegment)
+                        MediaSegmentAction.ASK_TO_SKIP -> newAskToSkipMediaSegments.add(mediaSegment)
+                        MediaSegmentAction.NOTHING -> Unit
+                    }
+                }
+
+                askToSkipMediaSegments = newAskToSkipMediaSegments
+            }
+        }
+    }
+
+    private fun addSkipAction(mediaSegment: MediaSegmentDto) {
+        val player = playerOrNull ?: return
+
+        player
+            .createMessage { _, _ ->
+                viewModelScope.launch(Dispatchers.Main) {
+                    player.seekTo(mediaSegment.end.inWholeMilliseconds)
+                }
+            }
+            // Segments at position 0 will never be hit by ExoPlayer so we need to add a minimum value
+            .setPosition(mediaSegment.start.inWholeMilliseconds.coerceAtLeast(1))
+            .setDeleteAfterDelivery(false)
+            .send()
     }
 
     /**
@@ -431,6 +511,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }
     }
 
+    fun skipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {
+        val player = playerOrNull ?: return
+        val mediaSegment = mediaSegmentDto ?: return
+        player.seekTo(mediaSegment.end.inWholeMilliseconds + 1)
+    }
+
     fun getStateAndPause(): PlayState? {
         val player = playerOrNull ?: return null
 
@@ -498,8 +584,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         // Setup or stop regular progress updates
         if (playbackState == Player.STATE_READY && playWhenReady) {
             startProgressUpdates()
+            if (askToSkipMediaSegments.isNotEmpty()) {
+                startSkipMediaSegmentUpdates()
+            }
         } else {
             stopProgressUpdates()
+            stopSkipMediaSegmentUpdates()
         }
 
         // Update media session
@@ -528,6 +618,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }
     }
 
+    override fun onPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int,
+    ) {
+        super.onPositionDiscontinuity(oldPosition, newPosition, reason)
+        playerOrNull?.updateSkipMediaSegmentButton()
+    }
+
     override fun onPlayerError(error: PlaybackException) {
         if (error.cause is MediaCodecDecoderException && !fallbackPreferExtensionRenderers) {
             Timber.e(error.cause, "Decoder failed, attempting to restart playback with decoder extensions preferred")
@@ -547,5 +646,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         reportPlaybackStop()
         ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         releasePlayer()
+    }
+
+    fun setSkipMediaSegmentButton(button: SkipMediaSegmentButton) {
+        skipMediaSegmentButton = button
     }
 }

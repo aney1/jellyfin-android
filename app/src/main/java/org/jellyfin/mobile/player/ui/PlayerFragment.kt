@@ -201,6 +201,13 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         // Create playback menus
         playerMenus = PlayerMenus(this, playerBinding, playerControlsBinding)
 
+        // Setup the ask-to-skip media segment button
+        viewModel.setSkipMediaSegmentButton(
+            SkipMediaSegmentButton(playerBinding.skipSegmentButton) { mediaSegment ->
+                viewModel.skipMediaSegment(mediaSegment)
+            },
+        )
+
         // Set controller timeout
         suppressControllerAutoHide(false)
 

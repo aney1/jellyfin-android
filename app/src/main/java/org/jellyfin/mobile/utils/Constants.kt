@@ -43,6 +43,7 @@ object Constants {
     const val PREF_EXTERNAL_PLAYER_APP = "pref_external_player_app"
     const val PREF_SUBTITLE_STYLE = "pref_subtitle_style"
     const val PREF_DOWNLOAD_LOCATION = "pref_download_location"
+    const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"
 
     // InputManager commands
     const val PLAYBACK_MANAGER_COMMAND_PLAY = "unpause"
@@ -101,6 +102,7 @@ object Constants {
     const val LANGUAGE_UNDEFINED = "und"
     const val TICKS_PER_MILLISECOND = 10000
     const val PLAYER_TIME_UPDATE_RATE = 10000L
+    const val SKIP_MEDIA_SEGMENT_UPDATE_DELAY = 1000L
     const val DEFAULT_CONTROLS_TIMEOUT_MS = 2500
     const val SWIPE_GESTURE_EXCLUSION_SIZE_VERTICAL = 64
     const val DEFAULT_CENTER_OVERLAY_TIMEOUT_MS = 250
