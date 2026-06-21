@@ -511,7 +511,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     fun skipToNext() {
         viewModelScope.launch {
-            queueManager.next()
+            // Capture the current item before advancing so it can be marked as played.
+            val skippedItemId = mediaSourceOrNull?.itemId
+            // Actively skipping a video with the skip button marks it as played. This only
+            // runs for an explicit user skip; automatic advancement at the end of a video
+            // goes through onPlayerStateChanged (STATE_ENDED) instead.
+            if (queueManager.next() && skippedItemId != null) {
+                try {
+                    playStateApi.markPlayedItem(itemId = skippedItemId)
+                } catch (e: ApiClientException) {
+                    Timber.e(e, "Failed to mark skipped item as played")
+                }
+            }
         }
     }
 
