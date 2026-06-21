@@ -130,8 +130,9 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         super.onViewCreated(view, savedInstanceState)
         val webView = webViewBinding!!.webView
 
-        // Apply window insets
-        webView.applyWindowInsetsAsMargins()
+        // Apply window insets to the SwipeRefreshLayout, which is the direct child of the
+        // CoordinatorLayout and therefore has MarginLayoutParams (the WebView inside it does not).
+        webViewBinding!!.swipeRefreshLayout.applyWindowInsetsAsMargins()
 
         // Setup exclusion rects for gestures
         if (AndroidVersion.isAtLeastQ) {
