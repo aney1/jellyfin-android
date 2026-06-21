@@ -38,6 +38,7 @@ object Constants {
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
     const val PREF_EXOPLAYER_REMEMBER_BRIGHTNESS = "pref_exoplayer_remember_brightness"
     const val PREF_EXOPLAYER_BRIGHTNESS = "pref_exoplayer_brightness"
+    const val PREF_EXOPLAYER_PLAYBACK_SPEED = "pref_exoplayer_playback_speed"
     const val PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO = "pref_exoplayer_allow_background_audio"
     const val PREF_EXOPLAYER_ALLOW_HORIZONTAL_GESTURE = "pref_exoplayer_allow_horizontal_gesture"
     const val PREF_EXOPLAYER_DIRECT_PLAY_ASS = "pref_exoplayer_direct_play_ass"
