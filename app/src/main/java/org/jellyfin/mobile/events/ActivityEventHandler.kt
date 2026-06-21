@@ -107,6 +107,14 @@ class ActivityEventHandler(
             }
             ActivityEvent.OpenTubeArchivist -> {
                 supportFragmentManager.addFragment<TubeArchivistFragment>()
+                // Keep an active mini player floating above the Tube Archivist screen. Posted so it
+                // runs after the fragment transaction has added (and stacked) the new screen.
+                window.decorView.post {
+                    supportFragmentManager.fragments
+                        .filterIsInstance<PlayerFragment>()
+                        .firstOrNull()
+                        ?.bringMiniPlayerToFront()
+                }
             }
             ActivityEvent.SelectServer -> {
                 mainViewModel.resetServer()

@@ -511,8 +511,9 @@ class PlayerGestureHelper(
     }
 
     /**
-     * Trigger the fullscreen/portrait toggle once a center swipe covers enough vertical distance.
-     * Swiping up enables fullscreen (landscape), swiping down returns to portrait.
+     * Trigger the fullscreen/portrait/mini-player transition once a center swipe covers enough
+     * vertical distance. Swiping up enables fullscreen (landscape). Swiping down leaves fullscreen
+     * (back to portrait); swiping down again while already in portrait shrinks into the mini player.
      */
     private fun handleFullscreenSwipe(firstEvent: MotionEvent, currentEvent: MotionEvent): Boolean {
         if (swipeGestureFullscreenTriggered) {
@@ -524,7 +525,11 @@ class PlayerGestureHelper(
         val triggerDistance = playerView.measuredHeight * Constants.FULLSCREEN_SWIPE_RANGE_SCREEN_RATIO
         if (abs(verticalDistance) >= triggerDistance) {
             swipeGestureFullscreenTriggered = true
-            fragment.setFullscreenBySwipe(fullscreen = verticalDistance > 0)
+            when {
+                verticalDistance > 0 -> fragment.setFullscreenBySwipe(fullscreen = true)
+                fragment.isLandscape() -> fragment.setFullscreenBySwipe(fullscreen = false)
+                else -> fragment.enterMiniPlayer()
+            }
         }
         return true
     }
