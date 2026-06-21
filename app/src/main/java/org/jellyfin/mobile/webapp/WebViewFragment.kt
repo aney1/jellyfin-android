@@ -16,6 +16,8 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -143,6 +145,9 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         // Apply window insets to the SwipeRefreshLayout, which is the direct child of the
         // CoordinatorLayout and therefore has MarginLayoutParams (the WebView inside it does not).
         webViewBinding!!.swipeRefreshLayout.applyWindowInsetsAsMargins()
+        // Consume the insets on the WebView so the web client doesn't add its own status-bar
+        // padding on top of the margin above (which would leave an empty band at the top).
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { _, _ -> WindowInsetsCompat.CONSUMED }
 
         // Setup exclusion rects for gestures
         if (AndroidVersion.isAtLeastQ) {
