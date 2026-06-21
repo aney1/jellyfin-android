@@ -106,6 +106,9 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
                 runOnUiThread {
                     webViewBinding.loadingContainer.isVisible = false
                     webView.fadeIn()
+                    // The webapp is ready: enable pull-to-refresh and stop any running refresh
+                    webViewBinding.swipeRefreshLayout.isEnabled = true
+                    webViewBinding.swipeRefreshLayout.isRefreshing = false
                 }
                 requestNoBatteryOptimizations(webViewBinding.root)
             }
@@ -156,6 +159,17 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
 
         // Setup WebView
         webView.initialize()
+
+        // Setup pull-to-refresh. Only allow it when the webapp is scrolled to the top
+        // (so list screens like playlists can be refreshed without hijacking normal scrolling).
+        webViewBinding!!.swipeRefreshLayout.apply {
+            setColorSchemeResources(R.color.jellyfin_accent)
+            isEnabled = connected
+            setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 }
+            setOnRefreshListener {
+                webView.reload()
+            }
+        }
 
         webViewBinding!!.useDifferentServerButton.setOnClickListener {
             webView.removeCallbacks(timeoutRunnable)

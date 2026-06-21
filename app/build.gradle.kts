@@ -125,6 +125,7 @@ dependencies {
     implementation(libs.google.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.modernandroidpreferences)
 
     // Jetpack Compose
