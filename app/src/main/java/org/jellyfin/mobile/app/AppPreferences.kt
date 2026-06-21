@@ -133,6 +133,14 @@ class AppPreferences(context: Context) {
             }
         }
 
+    var exoPlayerPlaybackSpeed: Float
+        get() = sharedPreferences.getFloat(Constants.PREF_EXOPLAYER_PLAYBACK_SPEED, 1f)
+        set(value) {
+            sharedPreferences.edit {
+                putFloat(Constants.PREF_EXOPLAYER_PLAYBACK_SPEED, value)
+            }
+        }
+
     val exoPlayerAllowBackgroundAudio: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO, false)
 
