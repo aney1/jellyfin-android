@@ -281,6 +281,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }.build().apply {
             addListener(this@PlayerViewModel)
             applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MOVIE)
+            // Restore the last used playback speed
+            playbackParameters = playbackParameters.withSpeed(appPreferences.exoPlayerPlaybackSpeed)
         }
     }
 
@@ -677,6 +679,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         val parameters = player.playbackParameters
         if (parameters.speed != speed) {
             player.playbackParameters = parameters.withSpeed(speed)
+            appPreferences.exoPlayerPlaybackSpeed = speed
             return true
         }
         return false
