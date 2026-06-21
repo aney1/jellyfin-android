@@ -1,4 +1,5 @@
 import io.gitlab.arturbosch.detekt.Detekt
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -26,6 +27,18 @@ kotlin {
     }
 }
 
+// Name of the playlist targeted by the injected home-tab shortcut. Kept out of source so the
+// public repo doesn't reveal a private library's contents; set `homePlaylist.name` in
+// local.properties (gitignored), or pass -PhomePlaylist.name / the HOME_PLAYLIST_NAME env var.
+val homePlaylistName: String = run {
+    val localProperties = Properties()
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(localProperties::load)
+    localProperties.getProperty("homePlaylist.name")
+        ?: (project.findProperty("homePlaylist.name") as String?)
+        ?: System.getenv("HOME_PLAYLIST_NAME")
+        ?: ""
+}
+
 android {
     namespace = "org.jellyfin.mobile"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -37,6 +50,7 @@ android {
         versionCode = getVersionCode(versionName!!)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        buildConfigField("String", "HOME_PLAYLIST_NAME", "\"$homePlaylistName\"")
     }
 
     signingConfigs {
