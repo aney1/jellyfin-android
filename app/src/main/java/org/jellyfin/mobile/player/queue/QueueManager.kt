@@ -74,6 +74,9 @@ class QueueManager(
             audioStreamIndex = playOptions.audioStreamIndex,
             subtitleStreamIndex = playOptions.subtitleStreamIndex,
             playWhenReady = true,
+            // When starting a queue/playlist with no explicit position, resume each video from
+            // its saved position. Single-item playback keeps honoring the web client exactly.
+            resumeFromSavedPosition = currentQueue.size > 1,
         )
 
         return null
@@ -92,6 +95,7 @@ class QueueManager(
         audioStreamIndex: Int? = null,
         subtitleStreamIndex: Int? = null,
         playWhenReady: Boolean = true,
+        resumeFromSavedPosition: Boolean = false,
     ): PlayerException? {
         mediaSourceResolver.resolveMediaSource(
             itemId = itemId,
@@ -101,6 +105,7 @@ class QueueManager(
             startTimeTicks = startTimeTicks,
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
+            resumeFromSavedPosition = resumeFromSavedPosition,
         ).onSuccess { jellyfinMediaSource ->
             // Ensure transcoding of the current element is stopped
             currentMediaSourceOrNull?.let { oldMediaSource ->
@@ -162,6 +167,7 @@ class QueueManager(
             itemId = currentQueue[--currentQueueIndex],
             mediaSourceId = null,
             maxStreamingBitrate = currentMediaSource.maxStreamingBitrate,
+            resumeFromSavedPosition = true,
         )
         return true
     }
@@ -175,6 +181,7 @@ class QueueManager(
             itemId = currentQueue[++currentQueueIndex],
             mediaSourceId = null,
             maxStreamingBitrate = currentMediaSource.maxStreamingBitrate,
+            resumeFromSavedPosition = true,
         )
         return true
     }
