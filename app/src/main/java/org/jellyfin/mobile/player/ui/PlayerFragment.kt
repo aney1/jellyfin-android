@@ -9,11 +9,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.OrientationEventListener
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import androidx.annotation.RequiresApi
 import androidx.appcompat.widget.Toolbar
@@ -44,11 +46,13 @@ import org.jellyfin.mobile.utils.Constants.PIP_MAX_RATIONAL
 import org.jellyfin.mobile.utils.Constants.PIP_MIN_RATIONAL
 import org.jellyfin.mobile.utils.SmartOrientationListener
 import org.jellyfin.mobile.utils.brightness
+import org.jellyfin.mobile.utils.dip
 import org.jellyfin.mobile.utils.extensions.aspectRational
 import org.jellyfin.mobile.utils.extensions.getParcelableCompat
 import org.jellyfin.mobile.utils.extensions.isLandscape
 import org.jellyfin.mobile.utils.extensions.keepScreenOn
 import org.jellyfin.mobile.utils.toast
+import org.jellyfin.mobile.webapp.WebViewFragment
 import org.jellyfin.sdk.model.api.MediaStream
 import org.koin.android.ext.android.inject
 import com.google.android.exoplayer2.ui.R as ExoplayerR
@@ -72,6 +76,18 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     private lateinit var playerFullscreenHelper: PlayerFullscreenHelper
     lateinit var playerLockScreenHelper: PlayerLockScreenHelper
     lateinit var playerGestureHelper: PlayerGestureHelper
+
+    /**
+     * Whether the player is currently shrunk into the in-app floating mini player, where the
+     * video plays in a corner over the (still-running) web app so it can be navigated.
+     */
+    private var isMiniPlayer = false
+
+    /**
+     * The layout params used when the player fills the screen, saved so they can be restored
+     * when leaving the mini player.
+     */
+    private var fullPlayerLayoutParams: ViewGroup.LayoutParams? = null
 
     private val currentVideoStream: MediaStream?
         get() = viewModel.mediaSourceOrNull?.selectedVideoStream
@@ -103,6 +119,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             loadingIndicator.isVisible = playerState == Player.STATE_BUFFERING
             // Keep the auto-enter Picture-in-Picture state in sync with playback
             updatePictureInPictureParams()
+            if (isMiniPlayer) updateMiniPlayPauseIcon()
         }
         viewModel.decoderType.observe(this) { type ->
             playerMenus?.updatedSelectedDecoder(type)
@@ -156,6 +173,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
         // Insets handling
         ViewCompat.setOnApplyWindowInsetsListener(playerBinding.root) { _, insets ->
+            // In the mini player the video should fill the tiny window without inset padding
+            if (isMiniPlayer) {
+                playerView.setPadding(0)
+                return@setOnApplyWindowInsetsListener insets
+            }
+
             playerFullscreenHelper.onWindowInsetsChanged(insets)
 
             val systemInsets = when {
@@ -219,6 +242,22 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         fullscreenSwitcher.setOnClickListener {
             toggleFullscreen()
         }
+
+        setupMiniPlayerControls()
+    }
+
+    private fun setupMiniPlayerControls() {
+        playerBinding.miniPlayerControls.setOnClickListener {
+            expandFromMiniPlayer()
+        }
+        playerBinding.miniPlayPauseButton.setOnClickListener {
+            val player = viewModel.playerOrNull ?: return@setOnClickListener
+            if (player.isPlaying) viewModel.pause() else viewModel.play()
+            updateMiniPlayPauseIcon()
+        }
+        playerBinding.miniCloseButton.setOnClickListener {
+            parentFragmentManager.popBackStack()
+        }
     }
 
     override fun onStart() {
@@ -230,7 +269,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         super.onResume()
 
         // When returning from another app, fullscreen mode for landscape orientation has to be set again
-        if (isLandscape()) {
+        if (isLandscape() && !isMiniPlayer) {
             playerFullscreenHelper.enableFullscreen()
         }
 
@@ -242,6 +281,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
      * Handle current orientation and update fullscreen state and switcher icon
      */
     private fun updateFullscreenState(configuration: Configuration) {
+        // The mini player manages its own (non-fullscreen) window state
+        if (isMiniPlayer) {
+            return
+        }
+
         // Do not handle any orientation changes while being in Picture-in-Picture mode
         if (AndroidVersion.isAtLeastN && requireActivity().isInPictureInPictureMode) {
             return
@@ -306,6 +350,75 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             // Portrait video: only toggle the system bars without rotating
             if (fullscreen) playerFullscreenHelper.enableFullscreen() else playerFullscreenHelper.disableFullscreen()
         }
+    }
+
+    /**
+     * Shrink the player into a floating mini window in the bottom corner so the web app
+     * underneath becomes visible and interactive while the video keeps playing.
+     */
+    fun enterMiniPlayer() {
+        if (isMiniPlayer || _playerBinding == null) return
+        isMiniPlayer = true
+
+        val root = playerBinding.root
+        if (fullPlayerLayoutParams == null) {
+            fullPlayerLayoutParams = root.layoutParams
+        }
+        val miniWidth = resources.dip(MINI_PLAYER_WIDTH_DP)
+        val miniMargin = resources.dip(MINI_PLAYER_MARGIN_DP)
+        root.layoutParams = FrameLayout.LayoutParams(
+            miniWidth,
+            miniWidth * MINI_PLAYER_HEIGHT_RATIO / MINI_PLAYER_WIDTH_RATIO,
+            Gravity.BOTTOM or Gravity.END,
+        ).apply {
+            marginEnd = miniMargin
+            bottomMargin = miniMargin
+        }
+
+        // Hand the system bars and orientation back to the web app
+        playerFullscreenHelper.disableFullscreen()
+        requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+        // Swap the full controls for the minimal mini overlay
+        playerView.useController = false
+        playerView.setPadding(0)
+        playerOverlay.isVisible = false
+        updateMiniPlayPauseIcon()
+        playerBinding.miniPlayerControls.isVisible = true
+    }
+
+    /**
+     * Restore the player to fill the screen again, reversing [enterMiniPlayer].
+     */
+    fun expandFromMiniPlayer() {
+        if (!isMiniPlayer || _playerBinding == null) return
+        isMiniPlayer = false
+
+        fullPlayerLayoutParams?.let { playerBinding.root.layoutParams = it }
+
+        playerBinding.miniPlayerControls.isVisible = false
+        playerOverlay.isVisible = true
+        playerView.useController = true
+
+        // Reapply the full-player system bar / orientation state for the current video
+        updateFullscreenState(resources.configuration)
+    }
+
+    private fun updateMiniPlayPauseIcon() {
+        val isPlaying = viewModel.playerOrNull?.isPlaying == true
+        playerBinding.miniPlayPauseButton.setImageResource(
+            if (isPlaying) R.drawable.ic_pause_black_42dp else R.drawable.ic_play_black_42dp,
+        )
+    }
+
+    override fun onInterceptBackPressed(): Boolean {
+        if (isMiniPlayer) {
+            // While minimized the user is browsing the web app, so route back there. If the web
+            // app can't go back, return false to let the mini player be dismissed (back stack pop).
+            val webFragment = parentFragmentManager.fragments.filterIsInstance<WebViewFragment>().firstOrNull()
+            return webFragment?.onInterceptBackPressed() ?: false
+        }
+        return false
     }
 
     /**
@@ -454,6 +567,10 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        // Entering system PiP from the mini player: expand back to full so PiP shows just the video
+        if (isInPictureInPictureMode && isMiniPlayer) {
+            expandFromMiniPlayer()
+        }
         playerView.useController = !isInPictureInPictureMode
         if (isInPictureInPictureMode) {
             playerMenus?.dismissPlaybackInfo()
@@ -500,5 +617,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             // Reset screen brightness
             window.brightness = BRIGHTNESS_OVERRIDE_NONE
         }
+    }
+
+    companion object {
+        private const val MINI_PLAYER_WIDTH_DP = 220
+        private const val MINI_PLAYER_MARGIN_DP = 16
+        private const val MINI_PLAYER_WIDTH_RATIO = 16
+        private const val MINI_PLAYER_HEIGHT_RATIO = 9
     }
 }

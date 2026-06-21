@@ -101,4 +101,38 @@
             android:textSize="22sp"
             tools:visibility="visible"/>
     </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/mini_player_controls"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#33000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageButton
+            android:id="@+id/mini_play_pause_button"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_play_black_42dp"
+            android:tint="@android:color/white"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/mini_close_button"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_stop_black_32dp"
+            android:tint="@android:color/white"
+            tools:ignore="ContentDescription" />
+    </FrameLayout>
 </FrameLayout>
