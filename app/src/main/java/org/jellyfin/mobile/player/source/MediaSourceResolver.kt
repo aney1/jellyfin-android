@@ -13,6 +13,7 @@ import org.jellyfin.sdk.model.api.DeviceProfile
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.PlaybackInfoDto
 import org.jellyfin.sdk.model.extensions.inWholeTicks
+import org.jellyfin.sdk.model.extensions.ticks
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
@@ -34,7 +35,25 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
         autoOpenLiveStream: Boolean = true,
         enableDirectPlay: Boolean? = null,
         enableDirectStream: Boolean? = null,
+        resumeFromSavedPosition: Boolean = false,
     ): Result<RemoteJellyfinMediaSource> {
+        // Load additional item info if possible. Fetched before the playback info request so the
+        // saved resume position can be passed to the server (needed for transcoded streams).
+        val item = try {
+            withContext(Dispatchers.IO) {
+                userLibraryApi.getItem(itemId).content
+            }
+        } catch (e: ApiClientException) {
+            Timber.e(e, "Failed to load item for media source $itemId")
+            null
+        }
+
+        // Resume from the saved playback position when requested and no explicit start time was given.
+        val resolvedStartTime = startTime
+            ?: item?.userData?.playbackPositionTicks
+                ?.takeIf { resumeFromSavedPosition && it > 0 }
+                ?.ticks
+
         // Load media source info
         val playSessionId: String
         val mediaSourceInfo: MediaSourceInfo = try {
@@ -48,7 +67,7 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
                         mediaSourceId = mediaSourceId ?: itemId.toString().replace("-", ""),
                         deviceProfile = deviceProfile,
                         maxStreamingBitrate = maxStreamingBitrate,
-                        startTimeTicks = startTime?.inWholeTicks,
+                        startTimeTicks = resolvedStartTime?.inWholeTicks,
                         audioStreamIndex = audioStreamIndex,
                         subtitleStreamIndex = subtitleStreamIndex,
                         autoOpenLiveStream = autoOpenLiveStream,
@@ -68,17 +87,6 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
             return Result.failure(PlayerException.NetworkFailure(e))
         }
 
-        // Load additional item info if possible
-
-        val item = try {
-            withContext(Dispatchers.IO) {
-                userLibraryApi.getItem(itemId).content
-            }
-        } catch (e: ApiClientException) {
-            Timber.e(e, "Failed to load item for media source $itemId")
-            null
-        }
-
         // Create JellyfinMediaSource
         return try {
             val source = RemoteJellyfinMediaSource(
@@ -88,7 +96,7 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
                 playSessionId = playSessionId,
                 liveStreamId = mediaSourceInfo.liveStreamId,
                 maxStreamingBitrate = maxStreamingBitrate,
-                playbackDetails = PlaybackDetails(startTime, audioStreamIndex, subtitleStreamIndex),
+                playbackDetails = PlaybackDetails(resolvedStartTime, audioStreamIndex, subtitleStreamIndex),
             )
             Result.success(source)
         } catch (e: IllegalArgumentException) {
