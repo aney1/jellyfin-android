@@ -1,5 +1,6 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.app)
@@ -26,6 +27,18 @@ kotlin {
     }
 }
 
+// URL of the Tube Archivist instance opened by the in-app "TA" shortcut. Kept out of source so
+// the public repo doesn't contain a private address; set `tubeArchivist.url` in local.properties
+// (gitignored), or pass -PtubeArchivist.url / the TUBE_ARCHIVIST_URL env var. Empty when unset.
+val tubeArchivistUrl: String = run {
+    val localProperties = Properties()
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(localProperties::load)
+    localProperties.getProperty("tubeArchivist.url")
+        ?: (project.findProperty("tubeArchivist.url") as String?)
+        ?: System.getenv("TUBE_ARCHIVIST_URL")
+        ?: ""
+}
+
 android {
     namespace = "org.jellyfin.mobile"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -37,6 +50,7 @@ android {
         versionCode = getVersionCode(versionName!!)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        buildConfigField("String", "TUBE_ARCHIVIST_URL", "\"$tubeArchivistUrl\"")
     }
 
     signingConfigs {
