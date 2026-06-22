@@ -637,6 +637,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         Handler(Looper.getMainLooper()).post {
             updateFullscreenState(newConfig)
             playerGestureHelper.handleConfiguration(newConfig)
+            // A gesture-driven orientation change can leave the controls stuck visible: the
+            // interrupted touch cancels their auto-hide timer and it's never re-posted. Re-show
+            // while visible to re-arm the timeout so they fade out as expected.
+            if (!isMiniPlayer && playerView.isControllerVisible) {
+                playerView.showController()
+            }
         }
     }
 
