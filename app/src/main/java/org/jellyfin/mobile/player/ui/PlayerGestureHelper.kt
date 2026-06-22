@@ -6,6 +6,7 @@ import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.View
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF
 import android.widget.ImageView
@@ -29,6 +30,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.Locale
 import kotlin.math.abs
+import androidx.media3.ui.R as Media3R
 
 class PlayerGestureHelper(
     private val fragment: PlayerFragment,
@@ -48,6 +50,12 @@ class PlayerGestureHelper(
     private val seekOverlayProgress: ProgressBar by playerBinding::seekOverlayProgress
     private var isOnPressingSpeedUp = false
 
+    /**
+     * The player content frame (holds the video surface). Freeform zoom scales and translates
+     * this view; subtitles live in a separate overlay and are left untouched.
+     */
+    private val contentFrame: View by lazy { playerView.findViewById(Media3R.id.exo_content_frame) }
+
     init {
         if (appPreferences.exoPlayerRememberBrightness) {
             fragment.requireActivity().window.brightness = appPreferences.exoPlayerBrightness
@@ -59,6 +67,18 @@ class PlayerGestureHelper(
      * Useful on wide-screen phones to remove black bars from some movies.
      */
     private var isZoomEnabled = false
+
+    /**
+     * Freeform (pinch) zoom state, active once the user zooms in beyond the fill-screen mode.
+     * [freeformZoomScale] of 1 is the fill baseline; the content frame is scaled and translated
+     * (pivot at its top-left) to zoom around the gesture focus and to allow panning.
+     */
+    private var freeformZoomActive = false
+    private var freeformZoomScale = 1f
+    private var freeformTranslationX = 0f
+    private var freeformTranslationY = 0f
+    private var lastFocusX = 0f
+    private var lastFocusY = 0f
 
     /**
      * Tracks a value during a swipe gesture (between multiple onScroll calls).
@@ -215,6 +235,15 @@ class PlayerGestureHelper(
                 distanceX: Float,
                 distanceY: Float,
             ): Boolean {
+                // While freeform-zoomed, a one-finger drag pans the viewport.
+                if (freeformZoomActive) {
+                    freeformTranslationX -= distanceX
+                    freeformTranslationY -= distanceY
+                    clampFreeformPan()
+                    applyFreeformTransform()
+                    return true
+                }
+
                 // Check whether swipe was started in excluded region (vertical)
                 val exclusionSizeVertical = playerView.resources.dip(Constants.SWIPE_GESTURE_EXCLUSION_SIZE_VERTICAL)
                 if (
@@ -360,9 +389,31 @@ class PlayerGestureHelper(
 
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 val scaleFactor = detector.scaleFactor
-                if (abs(scaleFactor - Constants.ZOOM_SCALE_BASE) > Constants.ZOOM_SCALE_THRESHOLD) {
-                    isZoomEnabled = scaleFactor > 1
-                    updateZoomMode(isZoomEnabled)
+                if (freeformZoomActive) {
+                    applyFreeformZoom(scaleFactor, detector.focusX, detector.focusY)
+                    lastFocusX = detector.focusX
+                    lastFocusY = detector.focusY
+                    return true
+                }
+                if (abs(scaleFactor - Constants.ZOOM_SCALE_BASE) <= Constants.ZOOM_SCALE_THRESHOLD) {
+                    return true
+                }
+                when {
+                    // Already filling the screen; zooming further enters freeform zoom.
+                    scaleFactor > 1 && isZoomEnabled -> {
+                        enterFreeformZoom(detector.focusX, detector.focusY)
+                        applyFreeformZoom(scaleFactor, detector.focusX, detector.focusY)
+                    }
+                    // Fit -> fill
+                    scaleFactor > 1 -> {
+                        isZoomEnabled = true
+                        updateZoomMode(true)
+                    }
+                    // Fill -> fit
+                    isZoomEnabled -> {
+                        isZoomEnabled = false
+                        updateZoomMode(false)
+                    }
                 }
                 return true
             }
@@ -535,11 +586,77 @@ class PlayerGestureHelper(
     }
 
     fun handleConfiguration(newConfig: Configuration) {
+        // Leaving landscape resets freeform zoom along with the fill mode.
+        if (!fragment.isLandscape(newConfig) && freeformZoomActive) {
+            exitFreeformZoom()
+        }
         updateZoomMode(fragment.isLandscape(newConfig) && isZoomEnabled)
     }
 
     private fun updateZoomMode(enabled: Boolean) {
         playerView.resizeMode = if (enabled) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+    }
+
+    private fun enterFreeformZoom(focusX: Float, focusY: Float) {
+        freeformZoomActive = true
+        freeformZoomScale = 1f
+        freeformTranslationX = 0f
+        freeformTranslationY = 0f
+        lastFocusX = focusX
+        lastFocusY = focusY
+        contentFrame.pivotX = 0f
+        contentFrame.pivotY = 0f
+    }
+
+    /**
+     * Apply a pinch step in freeform zoom: scale around the gesture focus (keeping that point
+     * fixed) and pan by any focus movement. Drops back to fill mode once zoomed fully out.
+     */
+    private fun applyFreeformZoom(scaleFactor: Float, focusX: Float, focusY: Float) {
+        val newScale = (freeformZoomScale * scaleFactor).coerceIn(1f, MAX_FREEFORM_ZOOM)
+        val appliedFactor = newScale / freeformZoomScale
+        val focusDeltaX = focusX - lastFocusX
+        val focusDeltaY = focusY - lastFocusY
+
+        // Keep the focus point stationary while scaling (pivot at the content frame's top-left).
+        freeformTranslationX = focusX * (1 - appliedFactor) + appliedFactor * freeformTranslationX + focusDeltaX
+        freeformTranslationY = focusY * (1 - appliedFactor) + appliedFactor * freeformTranslationY + focusDeltaY
+        freeformZoomScale = newScale
+
+        if (freeformZoomScale <= 1f) {
+            exitFreeformZoom()
+            return
+        }
+        clampFreeformPan()
+        applyFreeformTransform()
+    }
+
+    private fun exitFreeformZoom() {
+        freeformZoomActive = false
+        freeformZoomScale = 1f
+        freeformTranslationX = 0f
+        freeformTranslationY = 0f
+        contentFrame.scaleX = 1f
+        contentFrame.scaleY = 1f
+        contentFrame.translationX = 0f
+        contentFrame.translationY = 0f
+    }
+
+    /**
+     * Constrain the pan so the zoomed content always covers the player viewport (no gaps).
+     */
+    private fun clampFreeformPan() {
+        val minTranslationX = contentFrame.width * (1 - freeformZoomScale)
+        val minTranslationY = contentFrame.height * (1 - freeformZoomScale)
+        freeformTranslationX = freeformTranslationX.coerceIn(minTranslationX, 0f)
+        freeformTranslationY = freeformTranslationY.coerceIn(minTranslationY, 0f)
+    }
+
+    private fun applyFreeformTransform() {
+        contentFrame.scaleX = freeformZoomScale
+        contentFrame.scaleY = freeformZoomScale
+        contentFrame.translationX = freeformTranslationX
+        contentFrame.translationY = freeformTranslationY
     }
 
     /**
@@ -573,5 +690,10 @@ class PlayerGestureHelper(
          * swipe gesture is enabled: brightness (left), fullscreen toggle (center), volume (right).
          */
         private const val FULLSCREEN_SWIPE_REGION_COUNT = 3
+
+        /**
+         * Maximum freeform zoom magnification (relative to the fill-screen baseline).
+         */
+        private const val MAX_FREEFORM_ZOOM = 4f
     }
 }
