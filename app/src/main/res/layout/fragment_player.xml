@@ -194,4 +194,16 @@
             android:tint="@android:color/white"
             tools:ignore="ContentDescription" />
     </FrameLayout>
+
+    <!-- Always-on playback position dot, shown while the full controls are hidden -->
+    <View
+        android:id="@+id/playback_position_dot"
+        android:layout_width="4dp"
+        android:layout_height="4dp"
+        android:layout_gravity="bottom|left"
+        android:background="@drawable/playback_position_dot"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        tools:ignore="RtlHardcoded" />
 </FrameLayout>
