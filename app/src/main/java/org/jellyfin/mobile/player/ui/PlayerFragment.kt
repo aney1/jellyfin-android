@@ -185,9 +185,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
         // Setup the ask-to-skip media segment button
         viewModel.setSkipMediaSegmentButton(
-            SkipMediaSegmentButton(playerBinding.skipSegmentButton) { mediaSegment ->
-                viewModel.skipMediaSegment(mediaSegment)
-            },
+            SkipMediaSegmentButton(
+                playerBinding.skipSegmentButton,
+                onSkip = { mediaSegment -> viewModel.skipMediaSegment(mediaSegment) },
+                onReplay = { mediaSegment -> viewModel.replayMediaSegment(mediaSegment) },
+            ),
         )
 
         // Set controller timeout
