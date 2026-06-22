@@ -135,4 +135,20 @@
             android:tint="@android:color/white"
             tools:ignore="ContentDescription" />
     </FrameLayout>
+
+    <!-- Thin always-on playback progress indicator, shown while the full controls are hidden -->
+    <ProgressBar
+        android:id="@+id/playback_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:clickable="false"
+        android:focusable="false"
+        android:maxHeight="2dp"
+        android:minHeight="2dp"
+        android:padding="0dp"
+        android:progressBackgroundTint="#33FFFFFF"
+        android:progressTint="@color/jellyfin_accent"
+        android:secondaryProgressTint="#55FFFFFF" />
 </FrameLayout>
