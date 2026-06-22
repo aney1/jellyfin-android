@@ -20,6 +20,7 @@ import org.jellyfin.mobile.settings.SettingsFragment
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.extensions.addFragment
 import org.jellyfin.mobile.utils.requestDownload
+import org.jellyfin.mobile.webapp.TubeArchivistFragment
 import org.jellyfin.mobile.webapp.WebappFunctionChannel
 import timber.log.Timber
 
@@ -98,6 +99,17 @@ class ActivityEventHandler(
             }
             ActivityEvent.OpenSettings -> {
                 supportFragmentManager.addFragment<SettingsFragment>()
+            }
+            ActivityEvent.OpenTubeArchivist -> {
+                supportFragmentManager.addFragment<TubeArchivistFragment>()
+                // Keep an active mini player floating above the Tube Archivist screen. Posted so it
+                // runs after the fragment transaction has added (and stacked) the new screen.
+                window.decorView.post {
+                    supportFragmentManager.fragments
+                        .filterIsInstance<PlayerFragment>()
+                        .firstOrNull()
+                        ?.bringMiniPlayerToFront()
+                }
             }
             ActivityEvent.SelectServer -> {
                 mainViewModel.resetServer()

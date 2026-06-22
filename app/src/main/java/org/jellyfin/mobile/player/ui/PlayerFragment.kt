@@ -404,6 +404,17 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         updateFullscreenState(resources.configuration)
     }
 
+    /**
+     * Bring the mini player to the front of the fragment container so it keeps floating above
+     * other layered screens (e.g. the Tube Archivist screen) opened on top of the web app.
+     */
+    fun bringMiniPlayerToFront() {
+        if (!isMiniPlayer) return
+        val root = _playerBinding?.root ?: return
+        root.bringToFront()
+        (root.parent as? ViewGroup)?.invalidate()
+    }
+
     private fun updateMiniPlayPauseIcon() {
         val isPlaying = viewModel.playerOrNull?.isPlaying == true
         playerBinding.miniPlayPauseButton.setImageResource(

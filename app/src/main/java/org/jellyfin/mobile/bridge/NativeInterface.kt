@@ -145,6 +145,11 @@ class NativeInterface(private val context: Context) : KoinComponent {
     }
 
     @JavascriptInterface
+    fun openTubeArchivist() {
+        emitEvent(ActivityEvent.OpenTubeArchivist)
+    }
+
+    @JavascriptInterface
     fun openClientSettings() {
         emitEvent(ActivityEvent.OpenSettings)
     }
