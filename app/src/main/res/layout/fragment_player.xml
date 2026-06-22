@@ -149,6 +149,6 @@
         android:minHeight="2dp"
         android:padding="0dp"
         android:progressBackgroundTint="#33FFFFFF"
-        android:progressTint="@color/jellyfin_accent"
+        android:progressTint="@color/playback_progress"
         android:secondaryProgressTint="#55FFFFFF" />
 </FrameLayout>
