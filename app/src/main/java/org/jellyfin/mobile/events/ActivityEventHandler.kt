@@ -21,6 +21,7 @@ import org.jellyfin.mobile.settings.SettingsFragment
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.extensions.addFragment
 import org.jellyfin.mobile.utils.requestDownload
+import org.jellyfin.mobile.webapp.MediaArchiveFragment
 import org.jellyfin.mobile.webapp.WebappFunctionChannel
 import timber.log.Timber
 
@@ -103,6 +104,9 @@ class ActivityEventHandler(
             }
             ActivityEvent.OpenSettings -> {
                 supportFragmentManager.addFragment<SettingsFragment>()
+            }
+            ActivityEvent.OpenMediaArchive -> {
+                supportFragmentManager.addFragment<MediaArchiveFragment>()
             }
             ActivityEvent.SelectServer -> {
                 mainViewModel.resetServer()
