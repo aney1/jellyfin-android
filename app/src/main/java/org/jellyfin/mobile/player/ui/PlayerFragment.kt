@@ -24,13 +24,17 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.setPadding
+import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AppPreferences
@@ -224,6 +228,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             }
             fullscreenSwitcher.setImageResource(fullscreenDrawable)
 
+            // Keep the thin progress bar above the system bars (no offset in fullscreen)
+            playerBinding.playbackProgressBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                bottomMargin = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            }
+
             insets
         }
 
@@ -248,6 +257,39 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         }
 
         setupMiniPlayerControls()
+        setupPlaybackProgressBar()
+    }
+
+    /**
+     * Drives the thin always-on progress bar: it shows whenever the full controls are hidden
+     * (and in the mini player) and is updated periodically from the player position.
+     */
+    private fun setupPlaybackProgressBar() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    updatePlaybackProgressBar()
+                    delay(PROGRESS_BAR_UPDATE_INTERVAL_MS)
+                }
+            }
+        }
+    }
+
+    private fun updatePlaybackProgressBar() {
+        val player = viewModel.playerOrNull ?: return
+        val progressBar = _playerBinding?.playbackProgressBar ?: return
+        // Shown whenever the full controls are hidden, and always in the mini player.
+        progressBar.isVisible = isMiniPlayer || !playerView.isControllerFullyVisible
+        val duration = player.duration
+        if (duration > 0) {
+            val durationInt = duration.toInt()
+            progressBar.max = durationInt
+            progressBar.progress = player.currentPosition.toInt().coerceIn(0, durationInt)
+            progressBar.secondaryProgress = player.bufferedPosition.toInt().coerceIn(0, durationInt)
+        } else {
+            progressBar.progress = 0
+            progressBar.secondaryProgress = 0
+        }
     }
 
     private fun setupMiniPlayerControls() {
@@ -394,6 +436,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerOverlay.isVisible = false
         updateMiniPlayPauseIcon()
         playerBinding.miniPlayerControls.isVisible = true
+
+        // Keep the thin progress bar pinned to the bottom of the mini window (no system-bar offset)
+        playerBinding.playbackProgressBar.isVisible = true
+        playerBinding.playbackProgressBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            bottomMargin = 0
+        }
     }
 
     /**
@@ -408,6 +456,10 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerBinding.miniPlayerControls.isVisible = false
         playerOverlay.isVisible = true
         playerView.useController = true
+
+        // Restore the progress bar's system-bar offset and visibility for full-screen playback
+        ViewCompat.requestApplyInsets(playerBinding.root)
+        playerBinding.playbackProgressBar.isVisible = !playerView.isControllerFullyVisible
 
         // Reapply the full-player system bar / orientation state for the current video
         updateFullscreenState(resources.configuration)
@@ -668,5 +720,6 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         private const val MINI_PLAYER_MARGIN_DP = 16
         private const val MINI_PLAYER_WIDTH_RATIO = 16
         private const val MINI_PLAYER_HEIGHT_RATIO = 9
+        private const val PROGRESS_BAR_UPDATE_INTERVAL_MS = 500L
     }
 }
