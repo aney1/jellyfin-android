@@ -45,6 +45,7 @@ import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.PermissionRequestHelper
 import org.jellyfin.mobile.utils.extractId
 import org.jellyfin.mobile.utils.isLowRamDevice
+import org.jellyfin.mobile.webapp.MediaArchiveFragment
 import org.jellyfin.mobile.webapp.RemoteVolumeProvider
 import org.jellyfin.mobile.webapp.WebViewFragment
 import org.jellyfin.mobile.webapp.WebappFunctionChannel
@@ -87,6 +88,7 @@ val applicationModule = module {
     // Fragments
     fragment { WebViewFragment() }
     fragment { PlayerFragment() }
+    fragment { MediaArchiveFragment() }
 
     // Connection helper
     single { ConnectionHelper(get(), get()) }

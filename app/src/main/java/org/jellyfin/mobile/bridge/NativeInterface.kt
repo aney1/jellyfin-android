@@ -169,6 +169,11 @@ class NativeInterface(private val context: Context) : KoinComponent {
     }
 
     @JavascriptInterface
+    fun openMediaArchive() {
+        emitEvent(ActivityEvent.OpenMediaArchive)
+    }
+
+    @JavascriptInterface
     fun openClientSettings() {
         emitEvent(ActivityEvent.OpenSettings)
     }
