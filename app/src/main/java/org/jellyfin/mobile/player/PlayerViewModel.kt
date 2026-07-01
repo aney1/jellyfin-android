@@ -112,6 +112,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     val playerState: LiveData<Int> get() = _playerState
     val decoderType: LiveData<DecoderType> get() = _decoderType
 
+    private val _isPlaying = MutableLiveData<Boolean>()
+    val isPlaying: LiveData<Boolean> get() = _isPlaying
+
     private val _error = MutableLiveData<String>()
     val error: LiveData<String> = _error
 
@@ -522,6 +525,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         playerOrNull?.seekToOffset(displayPreferences.skipForwardLength)
     }
 
+    fun stepBackwardOneFrame() {
+        val player = playerOrNull ?: return
+        val frameDurationMs = (Constants.MILLISECONDS_PER_SECOND / (player.videoFormat?.frameRate?.takeIf { it > 0f } ?: Constants.DEFAULT_FRAME_RATE)).toLong()
+        player.seekToOffset(-frameDurationMs)
+    }
+
+    fun stepForwardOneFrame() {
+        val player = playerOrNull ?: return
+        val frameDurationMs = (Constants.MILLISECONDS_PER_SECOND / (player.videoFormat?.frameRate?.takeIf { it > 0f } ?: Constants.DEFAULT_FRAME_RATE)).toLong()
+        player.seekToOffset(frameDurationMs)
+    }
+
     fun skipToPrevious() {
         val player = playerOrNull ?: return
         when {
@@ -687,6 +702,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 }
             }
         }
+    }
+
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        _isPlaying.postValue(isPlaying)
     }
 
     override fun onPositionDiscontinuity(

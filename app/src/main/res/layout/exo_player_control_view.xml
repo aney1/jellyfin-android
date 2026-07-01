@@ -29,6 +29,21 @@
         android:src="@drawable/ic_skip_previous_black_32dp"
         android:tint="?android:textColorPrimary"
         app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
+        app:layout_constraintEnd_toStartOf="@id/frame_previous_button"
+        app:layout_constraintTop_toTopOf="@id/play_pause_container"
+        app:layout_goneMarginEnd="@dimen/exo_center_controls_distance" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/frame_previous_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/ripple_background_circular"
+        android:padding="@dimen/exo_center_icon_padding"
+        android:src="@drawable/ic_frame_previous_black_32dp"
+        android:tint="?android:textColorPrimary"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
         app:layout_constraintEnd_toStartOf="@id/play_pause_container"
         app:layout_constraintTop_toTopOf="@id/play_pause_container" />
 
@@ -62,6 +77,20 @@
     </FrameLayout>
 
     <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/frame_next_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/ripple_background_circular"
+        android:padding="@dimen/exo_center_icon_padding"
+        android:src="@drawable/ic_frame_next_black_32dp"
+        android:tint="?android:textColorPrimary"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
+        app:layout_constraintStart_toEndOf="@id/play_pause_container"
+        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/next_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -71,8 +100,9 @@
         android:src="@drawable/ic_skip_next_black_32dp"
         android:tint="?android:textColorPrimary"
         app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
-        app:layout_constraintStart_toEndOf="@id/play_pause_container"
-        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
+        app:layout_constraintStart_toEndOf="@id/frame_next_button"
+        app:layout_constraintTop_toTopOf="@id/play_pause_container"
+        app:layout_goneMarginStart="@dimen/exo_center_controls_distance" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/exo_position"

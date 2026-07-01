@@ -1,7 +1,10 @@
 package org.jellyfin.mobile.player.ui
 
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.PopupMenu
@@ -35,6 +38,8 @@ class PlayerMenus(
     private val appPreferences: AppPreferences by inject()
     private val qualityOptionsProvider: QualityOptionsProvider by inject()
     private val previousButton: View by playerControlsBinding::previousButton
+    private val framePreviousButton: View by playerControlsBinding::framePreviousButton
+    private val frameNextButton: View by playerControlsBinding::frameNextButton
     private val nextButton: View by playerControlsBinding::nextButton
     private val lockScreenButton: View by playerControlsBinding::lockScreenButton
     private val audioStreamsButton: View by playerControlsBinding::audioStreamsButton
@@ -53,10 +58,50 @@ class PlayerMenus(
     private var subtitleCount = 0
     private var subtitlesEnabled = false
 
+    private val frameStepHandler = Handler(Looper.getMainLooper())
+    private var frameStepRunnable: Runnable? = null
+
+    private fun startFrameStep(action: () -> Unit) {
+        stopFrameStep()
+        action()
+        val runnable = object : Runnable {
+            override fun run() {
+                action()
+                frameStepHandler.postDelayed(this, FRAME_STEP_REPEAT_INTERVAL_MS)
+            }
+        }
+        frameStepRunnable = runnable
+        frameStepHandler.postDelayed(runnable, FRAME_STEP_INITIAL_DELAY_MS)
+    }
+
+    private fun stopFrameStep() {
+        frameStepRunnable?.let { frameStepHandler.removeCallbacks(it) }
+        frameStepRunnable = null
+    }
+
+    private fun frameStepTouchListener(action: () -> Unit) = View.OnTouchListener { view, event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startFrameStep(action)
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                stopFrameStep()
+                view.performClick()
+                true
+            }
+            else -> false
+        }
+    }
+
     init {
         previousButton.setOnClickListener {
             fragment.onSkipToPrevious()
         }
+        framePreviousButton.setOnTouchListener(frameStepTouchListener { fragment.onStepBackwardOneFrame() })
+        framePreviousButton.setOnClickListener { }
+        frameNextButton.setOnTouchListener(frameStepTouchListener { fragment.onStepForwardOneFrame() })
+        frameNextButton.setOnClickListener { }
         nextButton.setOnClickListener {
             fragment.onSkipToNext()
         }
@@ -100,6 +145,11 @@ class PlayerMenus(
         playbackInfo.setOnClickListener {
             dismissPlaybackInfo()
         }
+    }
+
+    fun updateFrameStepButtonsVisibility(visible: Boolean) {
+        framePreviousButton.isVisible = visible
+        frameNextButton.isVisible = visible
     }
 
     fun onQueueItemChanged(mediaSource: JellyfinMediaSource, hasNext: Boolean) {
@@ -334,6 +384,9 @@ class PlayerMenus(
     }
 
     companion object {
+        private const val FRAME_STEP_INITIAL_DELAY_MS = 400L
+        private const val FRAME_STEP_REPEAT_INTERVAL_MS = 250L
+
         private const val SUBTITLES_MENU_GROUP = 0
         private const val AUDIO_MENU_GROUP = 1
         private const val SPEED_MENU_GROUP = 2
