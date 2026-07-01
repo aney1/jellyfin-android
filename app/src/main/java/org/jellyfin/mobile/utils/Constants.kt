@@ -124,6 +124,8 @@ object Constants {
     const val DISPLAY_PREFERENCES_SKIP_FORWARD_LENGTH = "skipForwardLength"
     const val DEFAULT_SEEK_TIME_MS = 10000L
     const val MAX_SKIP_TO_PREV_MS = 3000L
+    const val MILLISECONDS_PER_SECOND = 1000f
+    const val DEFAULT_FRAME_RATE = 30f
     const val DOUBLE_TAP_RIPPLE_DURATION_MS = 100L
     const val FULL_SWIPE_RANGE_SCREEN_RATIO = 0.66f
 
