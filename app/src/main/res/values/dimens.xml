@@ -7,6 +7,10 @@
     <dimen name="exo_title_text_size">16sp</dimen>
     <dimen name="exo_player_controls_display_padding">12dp</dimen>
     <dimen name="exo_center_icon_padding">12dp</dimen>
+    <!-- Provides the spacing between the center buttons: the packed chain uses no margins,
+         because ConstraintLayout resolves margins around GONE chain members (chapter/frame
+         buttons) asymmetrically, which would shift the whole row off-center. -->
+    <dimen name="exo_center_icon_padding_horizontal">24dp</dimen>
     <dimen name="exo_center_controls_distance">24dp</dimen>
     <dimen name="exo_bottom_controls_size">42dp</dimen>
     <dimen name="exo_bottom_controls_padding">8dp</dimen>

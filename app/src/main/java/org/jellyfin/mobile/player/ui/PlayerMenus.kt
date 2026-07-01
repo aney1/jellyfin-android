@@ -1,7 +1,10 @@
 package org.jellyfin.mobile.player.ui
 
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
@@ -14,7 +17,6 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.get
 import androidx.core.view.isVisible
 import androidx.core.view.size
-import androidx.core.view.updateLayoutParams
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.TimeBar
 import org.jellyfin.mobile.R
@@ -46,8 +48,9 @@ class PlayerMenus(
     private val context = playerBinding.root.context
     private val appPreferences: AppPreferences by inject()
     private val qualityOptionsProvider: QualityOptionsProvider by inject()
-    private val playPauseContainer: View by playerControlsBinding::playPauseContainer
     private val previousButton: View by playerControlsBinding::previousButton
+    private val framePreviousButton: View by playerControlsBinding::framePreviousButton
+    private val frameNextButton: View by playerControlsBinding::frameNextButton
     private val nextButton: View by playerControlsBinding::nextButton
     private val previousChapterButton: View by playerControlsBinding::previousChapterButton
     private val nextChapterButton: View by playerControlsBinding::nextChapterButton
@@ -76,6 +79,43 @@ class PlayerMenus(
     private var subtitleCount = 0
     private var subtitlesEnabled = false
 
+    private val frameStepHandler = Handler(Looper.getMainLooper())
+    private var frameStepRunnable: Runnable? = null
+
+    private fun startFrameStep(action: () -> Unit) {
+        stopFrameStep()
+        action()
+        val runnable = object : Runnable {
+            override fun run() {
+                action()
+                frameStepHandler.postDelayed(this, FRAME_STEP_REPEAT_INTERVAL_MS)
+            }
+        }
+        frameStepRunnable = runnable
+        frameStepHandler.postDelayed(runnable, FRAME_STEP_INITIAL_DELAY_MS)
+    }
+
+    private fun stopFrameStep() {
+        frameStepRunnable?.let { frameStepHandler.removeCallbacks(it) }
+        frameStepRunnable = null
+    }
+
+    @Suppress("ClickableViewAccessibility")
+    private fun frameStepTouchListener(action: () -> Unit) = View.OnTouchListener { view, event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startFrameStep(action)
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                stopFrameStep()
+                view.performClick()
+                true
+            }
+            else -> false
+        }
+    }
+
     private val trickplayHelper = TrickplayHelper(
         trickplayContainer,
         trickplayThumbnail,
@@ -102,6 +142,10 @@ class PlayerMenus(
         previousButton.setOnClickListener {
             fragment.onSkipToPrevious()
         }
+        framePreviousButton.setOnTouchListener(frameStepTouchListener { fragment.onStepBackwardOneFrame() })
+        framePreviousButton.setOnClickListener { }
+        frameNextButton.setOnTouchListener(frameStepTouchListener { fragment.onStepForwardOneFrame() })
+        frameNextButton.setOnClickListener { }
         nextButton.setOnClickListener {
             fragment.onSkipToNext()
         }
@@ -153,6 +197,11 @@ class PlayerMenus(
         }
 
         fragment.setPlayerMenuHelper(playerMenuHelper)
+    }
+
+    fun updateFrameStepButtonsVisibility(visible: Boolean) {
+        framePreviousButton.isVisible = visible
+        frameNextButton.isVisible = visible
     }
 
     fun onQueueItemChanged(mediaSource: JellyfinMediaSource, hasNext: Boolean) {
@@ -225,17 +274,10 @@ class PlayerMenus(
     }
 
     private fun updateLayoutConstraints(hasChapters: Boolean) {
-        if (hasChapters) {
-            previousButton.updateLayoutParams<ConstraintLayout.LayoutParams> { endToStart = previousChapterButton.id }
-            nextButton.updateLayoutParams<ConstraintLayout.LayoutParams> { startToEnd = nextChapterButton.id }
-            previousChapterButton.isVisible = true
-            nextChapterButton.isVisible = true
-        } else {
-            previousButton.updateLayoutParams<ConstraintLayout.LayoutParams> { endToStart = playPauseContainer.id }
-            nextButton.updateLayoutParams<ConstraintLayout.LayoutParams> { startToEnd = playPauseContainer.id }
-            previousChapterButton.isVisible = false
-            nextChapterButton.isVisible = false
-        }
+        // The center buttons live in a LinearLayout, which skips gone children automatically -
+        // no constraint rewiring needed (upstream adjusted ConstraintLayout constraints here).
+        previousChapterButton.isVisible = hasChapters
+        nextChapterButton.isVisible = hasChapters
     }
 
     private fun setChapterMarkings(chapters: List<ChapterInfo>?, runTimeTicks: Long?) {
@@ -427,6 +469,9 @@ class PlayerMenus(
     }
 
     companion object {
+        private const val FRAME_STEP_INITIAL_DELAY_MS = 400L
+        private const val FRAME_STEP_REPEAT_INTERVAL_MS = 250L
+
         private const val SUBTITLES_MENU_GROUP = 0
         private const val AUDIO_MENU_GROUP = 1
         private const val SPEED_MENU_GROUP = 2
