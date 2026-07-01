@@ -41,6 +41,7 @@ class PlayerMenus(
     private val framePreviousButton: View by playerControlsBinding::framePreviousButton
     private val frameNextButton: View by playerControlsBinding::frameNextButton
     private val nextButton: View by playerControlsBinding::nextButton
+    private val lockScreenButton: View by playerControlsBinding::lockScreenButton
     private val audioStreamsButton: View by playerControlsBinding::audioStreamsButton
     private val subtitlesButton: ImageButton by playerControlsBinding::subtitlesButton
     private val speedButton: View by playerControlsBinding::speedButton
@@ -103,6 +104,9 @@ class PlayerMenus(
         frameNextButton.setOnClickListener { }
         nextButton.setOnClickListener {
             fragment.onSkipToNext()
+        }
+        lockScreenButton.setOnClickListener {
+            fragment.playerLockScreenHelper.lockScreen()
         }
         audioStreamsButton.setOnClickListener {
             fragment.suppressControllerAutoHide(true)

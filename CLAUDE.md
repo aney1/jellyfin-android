@@ -35,10 +35,6 @@ downloads, Android Auto) that the web layer calls into via JavaScript bridges.
 
 Build requires `local.properties` pointing at an Android SDK. compileSdk 34, minSdk 21, Java 11.
 
- ## Testing
-
-When device testing is necessary, use the AVD **Virtual_Pixel_10_Pro_XL** emulator before the physical phone. Only test when it's both useful and fast to do so — the user is more efficient at manual testing and can do it themselves.
-
 ### Build variants
 
 - **Flavor dimension `variant`**: `proprietary` (default — Chromecast via ExoPlayer cast extension
