@@ -84,6 +84,13 @@ class PlayerGestureHelper(
     private var swipeGestureFullscreenTriggered = false
 
     /**
+     * True from ACTION_DOWN until ACTION_UP/CANCEL when the gesture started within the OS back-gesture
+     * edge zone on the left side. We skip our gesture detector for these touches so the controller
+     * never shows while the OS is deciding whether to claim the gesture as a back navigation.
+     */
+    private var leftEdgeGestureActive = false
+
+    /**
      * The region a swipe gesture operates on, locked when the gesture starts.
      *
      * This must not be recomputed on every [GestureDetector.SimpleOnGestureListener.onScroll] call:
@@ -272,15 +279,23 @@ class PlayerGestureHelper(
     init {
         @Suppress("ClickableViewAccessibility")
         playerView.setOnTouchListener { _, event ->
-            if (playerView.useController) {
-                when (event.pointerCount) {
-                    1 -> gestureDetector.onTouchEvent(event)
-                    2 -> zoomGestureDetector.onTouchEvent(event)
-                }
-            } else {
-                unlockDetector.onTouchEvent(event)
+            val leftEdgeWidth = playerView.resources.dip(BACK_GESTURE_EDGE_WIDTH_DP)
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                leftEdgeGestureActive = event.x < leftEdgeWidth
             }
-            if (event.action == MotionEvent.ACTION_UP) {
+            val isLeftEdge = leftEdgeGestureActive
+            if (!isLeftEdge) {
+                if (playerView.useController) {
+                    when (event.pointerCount) {
+                        1 -> gestureDetector.onTouchEvent(event)
+                        2 -> zoomGestureDetector.onTouchEvent(event)
+                    }
+                } else {
+                    unlockDetector.onTouchEvent(event)
+                }
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                if (isLeftEdge) leftEdgeGestureActive = false
                 // Hide gesture indicator after timeout, if shown
                 gestureIndicatorOverlayLayout.apply {
                     if (isVisible) {
@@ -498,5 +513,12 @@ class PlayerGestureHelper(
          * Maximum freeform zoom magnification (relative to the fill-screen baseline).
          */
         private const val MAX_FREEFORM_ZOOM = 4f
+
+        /**
+         * Width of the left-edge zone (dp) reserved for the OS back gesture. Touches starting
+         * in this strip are passed through silently — we do not route them to our gesture detector,
+         * so the player controls can never open as a side effect of a back-navigation swipe.
+         */
+        private const val BACK_GESTURE_EDGE_WIDTH_DP = 24
     }
 }
