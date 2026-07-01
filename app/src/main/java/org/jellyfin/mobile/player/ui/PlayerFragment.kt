@@ -133,6 +133,10 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             updatePictureInPictureParams()
             if (isMiniPlayer) updateMiniPlayPauseIcon()
         }
+        viewModel.isPlaying.observe(this) { isPlaying ->
+            val canFrameStep = !isPlaying && viewModel.playerOrNull?.playbackState == Player.STATE_READY
+            playerMenus?.updateFrameStepButtonsVisibility(canFrameStep)
+        }
         viewModel.decoderType.observe(this) { type ->
             playerMenus?.updatedSelectedDecoder(type)
         }
@@ -565,6 +569,14 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
     fun onSkipToNext() {
         viewModel.skipToNext()
+    }
+
+    fun onStepBackwardOneFrame() {
+        viewModel.stepBackwardOneFrame()
+    }
+
+    fun onStepForwardOneFrame() {
+        viewModel.stepForwardOneFrame()
     }
 
     fun onSkipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {

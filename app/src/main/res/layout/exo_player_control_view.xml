@@ -33,75 +33,98 @@
             tools:text="Star Wars: A New Hope" />
     </androidx.appcompat.widget.Toolbar>
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/previous_button"
+<!-- The center buttons live in a plain LinearLayout centered on the parent: ConstraintLayout
+         resolves constraints through GONE widgets (chapter/frame-step buttons) inconsistently,
+         shifting or overlapping the row, while a LinearLayout simply skips gone children.
+         Spacing comes from the buttons' horizontal padding. -->
+    <LinearLayout
+        android:id="@+id/center_controls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="@dimen/exo_center_controls_distance"
-        android:background="@drawable/ripple_background_circular"
-        android:padding="@dimen/exo_center_icon_padding"
-        android:src="@drawable/ic_skip_previous_black_32dp"
-        android:tint="?android:textColorPrimary"
-        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
-        app:layout_constraintEnd_toStartOf="@id/previous_chapter_button"
-        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
-
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/previous_chapter_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="@dimen/exo_center_controls_distance"
-        android:background="@drawable/ripple_background_circular"
-        android:padding="@dimen/exo_center_icon_padding"
-        android:src="@drawable/ic_skip_previous_chapter_black_32dp"
-        android:tint="?android:textColorPrimary"
-        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
-        app:layout_constraintEnd_toStartOf="@id/play_pause_container"
-        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
-
-    <FrameLayout
-        android:id="@+id/play_pause_container"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/exo_play_pause"
+            android:id="@+id/previous_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/ripple_background_circular"
-            android:padding="@dimen/exo_center_icon_padding"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_skip_previous_black_32dp"
             android:tint="?android:textColorPrimary" />
-    </FrameLayout>
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/next_chapter_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/exo_center_controls_distance"
-        android:background="@drawable/ripple_background_circular"
-        android:padding="@dimen/exo_center_icon_padding"
-        android:src="@drawable/ic_skip_next_chapter_black_32dp"
-        android:tint="?android:textColorPrimary"
-        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
-        app:layout_constraintStart_toEndOf="@id/play_pause_container"
-        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/previous_chapter_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ripple_background_circular"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_skip_previous_chapter_black_32dp"
+            android:tint="?android:textColorPrimary" />
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/next_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/exo_center_controls_distance"
-        android:background="@drawable/ripple_background_circular"
-        android:padding="@dimen/exo_center_icon_padding"
-        android:src="@drawable/ic_skip_next_black_32dp"
-        android:tint="?android:textColorPrimary"
-        app:layout_constraintBottom_toBottomOf="@id/play_pause_container"
-        app:layout_constraintStart_toEndOf="@id/next_chapter_button"
-        app:layout_constraintTop_toTopOf="@id/play_pause_container" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/frame_previous_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ripple_background_circular"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_frame_previous_black_32dp"
+            android:tint="?android:textColorPrimary"
+            android:visibility="gone" />
+
+        <FrameLayout
+            android:id="@+id/play_pause_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/exo_play_pause"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/ripple_background_circular"
+                android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+                android:paddingVertical="@dimen/exo_center_icon_padding"
+                android:tint="?android:textColorPrimary" />
+        </FrameLayout>
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/frame_next_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ripple_background_circular"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_frame_next_black_32dp"
+            android:tint="?android:textColorPrimary"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/next_chapter_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ripple_background_circular"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_skip_next_chapter_black_32dp"
+            android:tint="?android:textColorPrimary" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/next_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ripple_background_circular"
+            android:paddingHorizontal="@dimen/exo_center_icon_padding_horizontal"
+            android:paddingVertical="@dimen/exo_center_icon_padding"
+            android:src="@drawable/ic_skip_next_black_32dp"
+            android:tint="?android:textColorPrimary" />
+    </LinearLayout>
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/exo_position"

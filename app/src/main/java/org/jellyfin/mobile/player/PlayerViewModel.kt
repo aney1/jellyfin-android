@@ -123,6 +123,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     val playerState: LiveData<Int> get() = _playerState
     val decoderType: LiveData<DecoderType> get() = _decoderType
 
+    private val _isPlaying = MutableLiveData<Boolean>()
+    val isPlaying: LiveData<Boolean> get() = _isPlaying
+
     // Player Menus
     private var playerMenuHelper: PlayerMenuHelper? = null
 
@@ -579,6 +582,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         playerOrNull?.seekToOffset(offsetMs)
     }
 
+    fun stepBackwardOneFrame() {
+        val player = playerOrNull ?: return
+        val frameRate = player.videoFormat?.frameRate?.takeIf { it > 0f } ?: Constants.DEFAULT_FRAME_RATE
+        player.seekToOffset((Constants.MILLISECONDS_PER_SECOND / frameRate).toLong().unaryMinus())
+    }
+
+    fun stepForwardOneFrame() {
+        val player = playerOrNull ?: return
+        val frameRate = player.videoFormat?.frameRate?.takeIf { it > 0f } ?: Constants.DEFAULT_FRAME_RATE
+        player.seekToOffset((Constants.MILLISECONDS_PER_SECOND / frameRate).toLong())
+    }
+
     private fun getCurrentChapterStartPosition(chapters: List<ChapterInfo>, playbackPosition: Duration): Duration? {
         val startPositions = chapters.map { c -> c.startPositionTicks.ticks }
         return startPositions.findLast { pos -> playbackPosition >= pos }
@@ -718,6 +733,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         val volumeRange = audioManager.getVolumeRange(stream)
         val scaled = volumeRange.scaleInRange(percent)
         audioManager.setStreamVolume(stream, scaled, 0)
+    }
+
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        _isPlaying.postValue(isPlaying)
     }
 
     @Deprecated("Deprecated in Java")
