@@ -202,6 +202,14 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerLockScreenHelper = PlayerLockScreenHelper(this, playerBinding, orientationListener)
         playerGestureHelper = PlayerGestureHelper(this, playerBinding, playerLockScreenHelper)
 
+        // ExoPlayer's DefaultTimeBar calls setSystemGestureExclusionRects on its full bounds,
+        // which blocks Android's back gesture on the left edge in the seek-bar's vertical range.
+        // Clear those rects after each layout pass so the system can always handle edge gestures.
+        val timeBar = playerControlsBinding.exoProgress
+        timeBar.viewTreeObserver.addOnGlobalLayoutListener {
+            ViewCompat.setSystemGestureExclusionRects(timeBar, emptyList())
+        }
+
         // Handle fullscreen switcher
         fullscreenSwitcher.setOnClickListener {
             toggleFullscreen()
