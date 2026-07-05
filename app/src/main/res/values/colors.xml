@@ -18,7 +18,7 @@
     <color name="playback_info_background">#cc000000</color>
     <color name="playback_timebar_unplayed">#333333</color>
 
-    <!-- Skip Media Segment Button -->
-    <color name="skip_media_segment_background">#202124</color>
+    <!-- Skip Media Segment Button (~70% opaque so the video shows through) -->
+    <color name="skip_media_segment_background">#B3202124</color>
     <color name="skip_media_segment_text">#DDDDDD</color>
 </resources>
