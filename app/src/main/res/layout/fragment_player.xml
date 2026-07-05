@@ -137,6 +137,23 @@
             tools:ignore="KeyboardInaccessibleWidget"
             tools:visibility="visible" />
 
+<!-- Bubble showing the summed amount of the recent skips (e.g. "+30s"), above the controls -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/seek_feedback_bubble"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="96dp"
+            android:background="@drawable/skip_media_segment_background"
+            android:clickable="false"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="8dp"
+            android:textColor="@color/skip_media_segment_text"
+            android:textSize="18sp"
+            android:visibility="gone"
+            tools:text="+30s"
+            tools:visibility="visible" />
+
         <Button
             android:id="@+id/skip_segment_button"
             android:layout_width="wrap_content"
