@@ -145,6 +145,16 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
                 appPreferences.exoPlayerShowFrameStepButtons
             playerMenus?.updateFrameStepButtonsVisibility(canFrameStep)
         }
+        viewModel.seekFeedback.observe(this) { amountMs ->
+            val bubble = _playerBinding?.seekFeedbackBubble ?: return@observe
+            if (amountMs != null && !isMiniPlayer) {
+                val seconds = amountMs / MILLISECONDS_PER_SECOND_LONG
+                bubble.text = if (seconds >= 0) "+${seconds}s" else "${seconds}s"
+                bubble.isVisible = true
+            } else {
+                bubble.isVisible = false
+            }
+        }
         viewModel.decoderType.observe(this) { type ->
             playerMenus?.updatedSelectedDecoder(type)
         }
@@ -462,6 +472,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerView.useController = false
         playerView.setPadding(0)
         playerOverlay.isVisible = false
+        playerBinding.seekFeedbackBubble.isVisible = false
         updateMiniPlayPauseIcon()
         playerBinding.miniPlayerControls.isVisible = true
 
@@ -762,5 +773,6 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         private const val MINI_PLAYER_WIDTH_RATIO = 16
         private const val MINI_PLAYER_HEIGHT_RATIO = 9
         private const val PROGRESS_BAR_UPDATE_INTERVAL_MS = 500L
+        private const val MILLISECONDS_PER_SECOND_LONG = 1000L
     }
 }

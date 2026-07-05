@@ -126,6 +126,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     private val _isPlaying = MutableLiveData<Boolean>()
     val isPlaying: LiveData<Boolean> get() = _isPlaying
 
+    /**
+     * The summed amount (in milliseconds) skipped back/forward by the recent seek actions,
+     * or null when no seek happened recently (hides the feedback bubble).
+     */
+    private val _seekFeedback = MutableLiveData<Long?>()
+    val seekFeedback: LiveData<Long?> get() = _seekFeedback
+    private var seekFeedbackAmountMs = 0L
+    private var seekFeedbackJob: Job? = null
+
     // Player Menus
     private var playerMenuHelper: PlayerMenuHelper? = null
 
@@ -602,10 +611,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     fun rewind() {
         playerOrNull?.seekToOffset(displayPreferences.skipBackLength.unaryMinus())
+        registerSeekFeedback(displayPreferences.skipBackLength.unaryMinus())
     }
 
     fun fastForward() {
         playerOrNull?.seekToOffset(displayPreferences.skipForwardLength)
+        registerSeekFeedback(displayPreferences.skipForwardLength)
+    }
+
+    /**
+     * Accumulate the amount skipped back/forward and publish it for the seek feedback bubble.
+     * The sum resets (and the bubble hides) after no skips happened for a few seconds.
+     */
+    private fun registerSeekFeedback(offsetMs: Long) {
+        seekFeedbackJob?.cancel()
+        seekFeedbackAmountMs += offsetMs
+        _seekFeedback.postValue(seekFeedbackAmountMs)
+        seekFeedbackJob = viewModelScope.launch {
+            delay(Constants.SEEK_FEEDBACK_TIMEOUT_MS)
+            seekFeedbackAmountMs = 0
+            _seekFeedback.postValue(null)
+        }
     }
 
     fun seekByOffset(offsetMs: Long) {
