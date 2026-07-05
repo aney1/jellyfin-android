@@ -1,5 +1,8 @@
 package org.jellyfin.mobile.player.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.Menu
@@ -29,10 +32,12 @@ import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.jellyfin.mobile.player.ui.playermenuhelper.PlayerMenuHelper
 import org.jellyfin.mobile.player.ui.playermenuhelper.SkipMediaSegmentButton
+import org.jellyfin.mobile.utils.toast
 import org.jellyfin.sdk.model.api.ChapterInfo
 import org.jellyfin.sdk.model.api.MediaStream
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import timber.log.Timber
 import java.util.Locale
 
 /**
@@ -61,6 +66,7 @@ class PlayerMenus(
     private val qualityButton: View by playerControlsBinding::qualityButton
     private val decoderButton: View by playerControlsBinding::decoderButton
     private val infoButton: View by playerControlsBinding::infoButton
+    private val youtubeButton: View by playerControlsBinding::youtubeButton
     private val playbackInfo: TextView by playerBinding::playbackInfo
     private val audioStreamsMenu: PopupMenu = createAudioStreamsMenu()
     private val subtitlesMenu: PopupMenu = createSubtitlesMenu()
@@ -78,6 +84,11 @@ class PlayerMenus(
 
     private var subtitleCount = 0
     private var subtitlesEnabled = false
+
+    /**
+     * The YouTube video id of the current media source, if it is an archived YouTube video.
+     */
+    private var youTubeVideoId: String? = null
 
     private val frameStepHandler = Handler(Looper.getMainLooper())
     private var frameStepRunnable: Runnable? = null
@@ -192,6 +203,16 @@ class PlayerMenus(
         infoButton.setOnClickListener {
             playbackInfo.isVisible = !playbackInfo.isVisible
         }
+        youtubeButton.setOnClickListener {
+            val videoId = youTubeVideoId ?: return@setOnClickListener
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Timber.e(e, "Failed to open YouTube link")
+                context.toast(R.string.player_error_no_app_for_youtube)
+            }
+        }
         playbackInfo.setOnClickListener {
             dismissPlaybackInfo()
         }
@@ -238,6 +259,9 @@ class PlayerMenus(
         subtitlesEnabled = selectedSubtitleStream != null
 
         updateSubtitlesButton()
+
+        youTubeVideoId = mediaSource.youTubeVideoId
+        youtubeButton.isVisible = youTubeVideoId != null
 
         val height = videoStream?.height
         val width = videoStream?.width
