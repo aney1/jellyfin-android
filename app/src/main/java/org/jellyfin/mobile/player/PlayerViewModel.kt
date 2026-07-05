@@ -129,8 +129,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     // Player Menus
     private var playerMenuHelper: PlayerMenuHelper? = null
 
-    // Media Segments Ask to Skip
-    private var askToSkipMediaSegments: List<MediaSegmentDto> = emptyList()
+    // Media Segments
+    private var mediaSegments: List<MediaSegmentDto> = emptyList()
+    private var autoSkipSegments: Set<MediaSegmentDto> = emptySet()
+    private val autoSkippedSegments = mutableSetOf<MediaSegmentDto>()
+    private var previousMediaSegment: MediaSegmentDto? = null
+    private var skipSegmentBackButtonJob: Job? = null
 
     private val _error = MutableLiveData<String>()
     val error: LiveData<String> = _error
@@ -426,15 +430,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     private fun Player.updateSkipMediaSegmentButton() {
-        val mediaSegments = askToSkipMediaSegments
         if (mediaSegments.isEmpty()) return
 
         val playbackPosition = currentPosition.milliseconds
-        val currentMediaSegment = mediaSegments.find { seg -> playbackPosition in seg.start..seg.end }
+        val currentMediaSegment = mediaSegments.find { seg ->
+            playbackPosition >= seg.start && playbackPosition < seg.end
+        }
         if (currentMediaSegment != null) {
-            playerMenuHelper?.skipMediaSegmentButton?.showSkipSegmentButton(currentMediaSegment)
+            // Inside a segment: offer a manual skip, unless an auto-skip is still pending for it.
+            val autoSkipPending = currentMediaSegment in autoSkipSegments && currentMediaSegment !in autoSkippedSegments
+            if (!autoSkipPending) {
+                cancelSkipSegmentBackButton()
+                playerMenuHelper?.skipMediaSegmentButton?.showSkipSegmentButton(currentMediaSegment)
+            }
+            previousMediaSegment = currentMediaSegment
         } else {
-            playerMenuHelper?.skipMediaSegmentButton?.hideSkipSegmentButton()
+            // Just left a segment (it finished or was seeked past): offer to replay it.
+            previousMediaSegment?.let { leftSegment ->
+                previousMediaSegment = null
+                showSkipSegmentBackButton(leftSegment)
+            }
         }
     }
 
@@ -524,24 +539,33 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     private fun applyMediaSegments(jellyfinMediaSource: JellyfinMediaSource) {
-        askToSkipMediaSegments = emptyList()
+        mediaSegments = emptyList()
+        autoSkipSegments = emptySet()
+        autoSkippedSegments.clear()
+        previousMediaSegment = null
+        cancelSkipSegmentBackButton()
+        playerMenuHelper?.skipMediaSegmentButton?.hideSkipSegmentButton()
 
         viewModelScope.launch {
             if (jellyfinMediaSource.item != null) {
-                val mediaSegments = mediaSegmentRepository.getSegmentsForItem(jellyfinMediaSource.item)
-                val newAskToSkipMediaSegments = mutableListOf<MediaSegmentDto>()
+                val segments = mediaSegmentRepository.getSegmentsForItem(jellyfinMediaSource.item)
+                val allSegments = mutableListOf<MediaSegmentDto>()
+                val newAutoSkipSegments = mutableSetOf<MediaSegmentDto>()
 
-                for (mediaSegment in mediaSegments) {
-                    val action = mediaSegmentRepository.getMediaSegmentAction(mediaSegment)
-
-                    when (action) {
-                        MediaSegmentAction.SKIP -> addSkipAction(mediaSegment)
-                        MediaSegmentAction.ASK_TO_SKIP -> newAskToSkipMediaSegments.add(mediaSegment)
+                for (mediaSegment in segments) {
+                    when (mediaSegmentRepository.getMediaSegmentAction(mediaSegment)) {
+                        MediaSegmentAction.SKIP -> {
+                            allSegments.add(mediaSegment)
+                            newAutoSkipSegments.add(mediaSegment)
+                            addSkipAction(mediaSegment)
+                        }
+                        MediaSegmentAction.ASK_TO_SKIP -> allSegments.add(mediaSegment)
                         MediaSegmentAction.NOTHING -> Unit
                     }
                 }
 
-                askToSkipMediaSegments = newAskToSkipMediaSegments
+                mediaSegments = allSegments
+                autoSkipSegments = newAutoSkipSegments
             }
         }
     }
@@ -552,7 +576,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         player
             .createMessage { _, _ ->
                 viewModelScope.launch(Dispatchers.Main) {
-                    player.seekTo(mediaSegment.end.inWholeMilliseconds)
+                    // Auto-skip a segment only the first time it's reached. Afterwards the user can
+                    // replay it and decide to skip manually, so don't auto-skip it again.
+                    if (mediaSegment !in autoSkippedSegments) {
+                        autoSkippedSegments.add(mediaSegment)
+                        player.seekTo(mediaSegment.end.inWholeMilliseconds)
+                        showSkipSegmentBackButton(mediaSegment)
+                    }
                 }
             }
             // Segments at position 0 will never be hit by ExoPlayer so we need to add a minimum value
@@ -670,10 +700,35 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }
     }
 
-    fun skipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {
+    fun skipMediaSegment(mediaSegment: MediaSegmentDto) {
         val player = playerOrNull ?: return
-        val mediaSegment = mediaSegmentDto ?: return
-        player.seekTo(mediaSegment.end.inWholeMilliseconds + 1)
+        player.seekTo(mediaSegment.end.inWholeMilliseconds)
+        // Skipping leaves the segment, so offer to replay it instead of waiting for the poll.
+        previousMediaSegment = null
+        showSkipSegmentBackButton(mediaSegment)
+    }
+
+    /**
+     * Seek back to the start of [mediaSegment] to replay a part that was skipped or finished.
+     */
+    fun replayMediaSegment(mediaSegment: MediaSegmentDto) {
+        val player = playerOrNull ?: return
+        cancelSkipSegmentBackButton()
+        player.seekTo(mediaSegment.start.inWholeMilliseconds)
+    }
+
+    private fun showSkipSegmentBackButton(mediaSegment: MediaSegmentDto) {
+        skipSegmentBackButtonJob?.cancel()
+        playerMenuHelper?.skipMediaSegmentButton?.showReplaySegmentButton(mediaSegment)
+        skipSegmentBackButtonJob = viewModelScope.launch {
+            delay(Constants.SKIP_MEDIA_SEGMENT_BACK_BUTTON_TIMEOUT)
+            playerMenuHelper?.skipMediaSegmentButton?.hideSkipSegmentButton()
+        }
+    }
+
+    private fun cancelSkipSegmentBackButton() {
+        skipSegmentBackButtonJob?.cancel()
+        skipSegmentBackButtonJob = null
     }
 
     fun getStateAndPause(): PlayState? {
@@ -762,7 +817,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             if (!playerMenuHelper?.chapterMarkings?.markings.isNullOrEmpty()) {
                 startChapterMarkingUpdates()
             }
-            if (askToSkipMediaSegments.isNotEmpty()) {
+            if (mediaSegments.isNotEmpty()) {
                 startSkipMediaSegmentUpdates()
             }
         } else {

@@ -604,8 +604,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         viewModel.stepForwardOneFrame()
     }
 
-    fun onSkipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {
+    fun onSkipMediaSegment(mediaSegmentDto: MediaSegmentDto) {
         viewModel.skipMediaSegment(mediaSegmentDto)
+    }
+
+    fun onReplayMediaSegment(mediaSegmentDto: MediaSegmentDto) {
+        viewModel.replayMediaSegment(mediaSegmentDto)
     }
 
     fun onPopupDismissed() {

@@ -136,7 +136,11 @@ class PlayerMenus(
     )
 
     private val playerMenuHelper: PlayerMenuHelper = PlayerMenuHelper(
-        skipMediaSegmentButton = SkipMediaSegmentButton(skipSegmentButton, fragment::onSkipMediaSegment),
+        skipMediaSegmentButton = SkipMediaSegmentButton(
+            skipSegmentButton,
+            onSkip = fragment::onSkipMediaSegment,
+            onReplay = fragment::onReplayMediaSegment,
+        ),
     )
 
     init {
