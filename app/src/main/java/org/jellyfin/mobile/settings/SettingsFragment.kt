@@ -60,6 +60,12 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     private lateinit var rememberBrightnessPreference: Preference
     private lateinit var backgroundAudioPreference: Preference
     private lateinit var horizontalGesturePreference: Preference
+    private lateinit var miniPlayerPreference: CheckBoxPreference
+    private lateinit var thinProgressBarPreference: CheckBoxPreference
+    private lateinit var freeformZoomPreference: CheckBoxPreference
+    private lateinit var frameSteppingPreference: CheckBoxPreference
+    private lateinit var youtubeButtonPreference: CheckBoxPreference
+    private lateinit var rotatePortraitVideosPreference: CheckBoxPreference
     private lateinit var directPlayAssPreference: Preference
     private lateinit var networkBufferPreference: Preference
     private lateinit var externalPlayerChoicePreference: Preference
@@ -94,6 +100,24 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     @Suppress("LongMethod")
     private fun buildSettingsScreen() = screen(requireContext()) {
         collapseIcon = true
+        categoryHeader(PREF_CATEGORY_APP_FEATURES) {
+            titleRes = R.string.pref_category_app_features
+        }
+        checkBox(Constants.PREF_WEB_PULL_TO_REFRESH) {
+            titleRes = R.string.pref_web_pull_to_refresh
+            summaryRes = R.string.pref_web_pull_to_refresh_summary
+            defaultValue = true
+        }
+        checkBox(Constants.PREF_WEB_TUBE_ARCHIVIST_TAB) {
+            titleRes = R.string.pref_web_tube_archivist_tab
+            summaryRes = R.string.pref_web_tube_archivist_tab_summary
+            defaultValue = true
+        }
+        checkBox(Constants.PREF_WEB_HOME_PLAYLIST_SHORTCUT) {
+            titleRes = R.string.pref_web_home_playlist_shortcut
+            summaryRes = R.string.pref_web_home_playlist_shortcut_summary
+            defaultValue = true
+        }
         categoryHeader(PREF_CATEGORY_MUSIC_PLAYER) {
             titleRes = R.string.pref_category_music_player
         }
@@ -129,6 +153,12 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 pressSpeedUpPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 backgroundAudioPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 horizontalGesturePreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                miniPlayerPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                thinProgressBarPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                freeformZoomPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                frameSteppingPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                youtubeButtonPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                rotatePortraitVideosPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 directPlayAssPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 networkBufferPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 externalPlayerChoicePreference.enabled = selection == VideoPlayerType.EXTERNAL_PLAYER
@@ -173,6 +203,42 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
         horizontalGesturePreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_HORIZONTAL_GESTURE) {
             titleRes = R.string.pref_exoplayer_allow_horizontal_gesture
             summaryRes = R.string.pref_exoplayer_allow_horizontal_gesture_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        miniPlayerPreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_MINI_PLAYER) {
+            titleRes = R.string.pref_exoplayer_allow_mini_player
+            summaryRes = R.string.pref_exoplayer_allow_mini_player_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        thinProgressBarPreference = checkBox(Constants.PREF_EXOPLAYER_SHOW_THIN_PROGRESS_BAR) {
+            titleRes = R.string.pref_exoplayer_show_thin_progress_bar
+            summaryRes = R.string.pref_exoplayer_show_thin_progress_bar_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        freeformZoomPreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_FREEFORM_ZOOM) {
+            titleRes = R.string.pref_exoplayer_allow_freeform_zoom
+            summaryRes = R.string.pref_exoplayer_allow_freeform_zoom_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        frameSteppingPreference = checkBox(Constants.PREF_EXOPLAYER_SHOW_FRAME_STEP_BUTTONS) {
+            titleRes = R.string.pref_exoplayer_show_frame_step_buttons
+            summaryRes = R.string.pref_exoplayer_show_frame_step_buttons_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        youtubeButtonPreference = checkBox(Constants.PREF_EXOPLAYER_SHOW_YOUTUBE_BUTTON) {
+            titleRes = R.string.pref_exoplayer_show_youtube_button
+            summaryRes = R.string.pref_exoplayer_show_youtube_button_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
+        }
+        rotatePortraitVideosPreference = checkBox(Constants.PREF_EXOPLAYER_ROTATE_PORTRAIT_VIDEOS) {
+            titleRes = R.string.pref_exoplayer_rotate_portrait_videos
+            summaryRes = R.string.pref_exoplayer_rotate_portrait_videos_summary
             enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
             defaultValue = true
         }
@@ -300,6 +366,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     }
 
     companion object {
+        const val PREF_CATEGORY_APP_FEATURES = "pref_category_app_features"
         const val PREF_CATEGORY_MUSIC_PLAYER = "pref_category_music"
         const val PREF_CATEGORY_VIDEO_PLAYER = "pref_category_video"
         const val PREF_CATEGORY_DOWNLOADS = "pref_category_downloads"

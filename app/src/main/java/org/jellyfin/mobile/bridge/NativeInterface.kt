@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.session.PlaybackState
 import android.webkit.JavascriptInterface
 import androidx.core.content.ContextCompat
+import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -40,6 +41,19 @@ class NativeInterface(private val context: Context) : KoinComponent {
     private val activityEventHandler: ActivityEventHandler = get()
     private val remoteVolumeProvider: RemoteVolumeProvider by inject()
     private val deviceProfileBuilder: DeviceProfileBuilder by inject()
+    private val appPreferences: AppPreferences by inject()
+
+    /**
+     * Whether the injected "YT Watch list" home tab shortcut should be installed (app setting).
+     */
+    @JavascriptInterface
+    fun isHomeShortcutEnabled(): Boolean = appPreferences.webHomePlaylistShortcut
+
+    /**
+     * Whether the injected Tube Archivist tab should be installed (app setting).
+     */
+    @JavascriptInterface
+    fun isTubeArchivistTabEnabled(): Boolean = appPreferences.webTubeArchivistTab
 
     @SuppressLint("HardwareIds")
     @JavascriptInterface

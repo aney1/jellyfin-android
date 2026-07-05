@@ -400,7 +400,7 @@ class PlayerGestureHelper(
                 }
                 when {
                     // Already filling the screen; zooming further enters freeform zoom.
-                    scaleFactor > 1 && isZoomEnabled -> {
+                    scaleFactor > 1 && isZoomEnabled && appPreferences.exoPlayerAllowFreeformZoom -> {
                         enterFreeformZoom(detector.focusX, detector.focusY)
                         applyFreeformZoom(scaleFactor, detector.focusX, detector.focusY)
                     }

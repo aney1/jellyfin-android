@@ -91,6 +91,13 @@
     <string name="external_player_unknown_error">Unknown error in external player. Playback tracking disabled.</string>
 
     <string name="activity_name_settings">Jellyfin Settings</string>
+    <string name="pref_category_app_features">App features</string>
+    <string name="pref_web_pull_to_refresh">Pull to refresh</string>
+    <string name="pref_web_pull_to_refresh_summary">Pull down at the top of the web interface to reload it</string>
+    <string name="pref_web_tube_archivist_tab">Tube Archivist tab</string>
+    <string name="pref_web_tube_archivist_tab_summary">Show the Tube Archivist tab in the web interface (takes effect after reloading the web app)</string>
+    <string name="pref_web_home_playlist_shortcut">YT Watch list home shortcut</string>
+    <string name="pref_web_home_playlist_shortcut_summary">Show the "YT Watch list [Smart]" shortcut in the home tab bar (takes effect after reloading the web app)</string>
     <string name="pref_category_music_player">Music player</string>
     <string name="pref_music_notification_always_dismissible_title">Dismissible player notification</string>
     <string name="pref_music_notification_always_dismissible_summary_off">The notification can only be dismissed when playback is paused</string>
@@ -107,6 +114,18 @@
     <string name="pref_exoplayer_allow_brightness_volume_gesture">Brightness and volume gestures</string>
     <string name="pref_exoplayer_allow_fullscreen_swipe_gesture">Swipe to toggle fullscreen</string>
     <string name="pref_exoplayer_allow_fullscreen_swipe_gesture_summary">Swipe up in the center of the screen to go fullscreen, swipe down to return to portrait</string>
+    <string name="pref_exoplayer_allow_mini_player">Floating mini player</string>
+    <string name="pref_exoplayer_allow_mini_player_summary">Swipe down in the center of the screen (while in portrait) to shrink the video into a floating window over the web app</string>
+    <string name="pref_exoplayer_show_thin_progress_bar">Thin progress bar</string>
+    <string name="pref_exoplayer_show_thin_progress_bar_summary">Show a thin progress bar at the bottom edge while the player controls are hidden</string>
+    <string name="pref_exoplayer_allow_freeform_zoom">Freeform pinch zoom</string>
+    <string name="pref_exoplayer_allow_freeform_zoom_summary">Pinch beyond the fill-screen mode to zoom in further and pan the video</string>
+    <string name="pref_exoplayer_show_frame_step_buttons">Frame stepping buttons</string>
+    <string name="pref_exoplayer_show_frame_step_buttons_summary">Show frame-by-frame stepping buttons while the video is paused</string>
+    <string name="pref_exoplayer_show_youtube_button">YouTube button</string>
+    <string name="pref_exoplayer_show_youtube_button_summary">Show a button that opens archived YouTube videos in YouTube</string>
+    <string name="pref_exoplayer_rotate_portrait_videos">Rotate portrait videos</string>
+    <string name="pref_exoplayer_rotate_portrait_videos_summary">The fullscreen button and swipe gesture also rotate portrait videos into landscape (letterboxed)</string>
     <string name="pref_exoplayer_remember_brightness">Remember display brightness</string>
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
     <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the screen to temporarily speed up playback</string>

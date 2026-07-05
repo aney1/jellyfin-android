@@ -133,6 +133,33 @@ class AppPreferences(context: Context) {
     val exoPlayerAllowHorizontalGesture: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_HORIZONTAL_GESTURE, true)
 
+    val exoPlayerAllowMiniPlayer: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_MINI_PLAYER, true)
+
+    val exoPlayerShowThinProgressBar: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_SHOW_THIN_PROGRESS_BAR, true)
+
+    val exoPlayerAllowFreeformZoom: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_FREEFORM_ZOOM, true)
+
+    val exoPlayerShowFrameStepButtons: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_SHOW_FRAME_STEP_BUTTONS, true)
+
+    val exoPlayerShowYouTubeButton: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_SHOW_YOUTUBE_BUTTON, true)
+
+    val exoPlayerRotatePortraitVideos: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ROTATE_PORTRAIT_VIDEOS, true)
+
+    val webPullToRefresh: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_WEB_PULL_TO_REFRESH, true)
+
+    val webTubeArchivistTab: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_WEB_TUBE_ARCHIVIST_TAB, true)
+
+    val webHomePlaylistShortcut: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_WEB_HOME_PLAYLIST_SHORTCUT, true)
+
     val exoPlayerDirectPlayAss: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_DIRECT_PLAY_ASS, false)
 

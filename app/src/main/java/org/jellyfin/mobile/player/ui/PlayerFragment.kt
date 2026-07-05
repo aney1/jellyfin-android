@@ -140,7 +140,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             if (isMiniPlayer) updateMiniPlayPauseIcon()
         }
         viewModel.isPlaying.observe(this) { isPlaying ->
-            val canFrameStep = !isPlaying && viewModel.playerOrNull?.playbackState == Player.STATE_READY
+            val canFrameStep = !isPlaying &&
+                viewModel.playerOrNull?.playbackState == Player.STATE_READY &&
+                appPreferences.exoPlayerShowFrameStepButtons
             playerMenus?.updateFrameStepButtonsVisibility(canFrameStep)
         }
         viewModel.decoderType.observe(this) { type ->
@@ -231,11 +233,15 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
                 bottom = systemInsets.bottom,
             )
 
-            // Update fullscreen switcher icon. The switcher toggles the orientation, so the icon
+            // Update fullscreen switcher icon. When the switcher toggles the orientation, the icon
             // reflects the orientation rather than the system bar visibility - for portrait videos
             // the bars are already hidden in portrait, yet the button still enters landscape.
+            val isFullscreenForIcon = when {
+                fullscreenTogglesOrientation -> isLandscape()
+                else -> playerFullscreenHelper.isFullscreen
+            }
             val fullscreenDrawable = when {
-                isLandscape() -> R.drawable.ic_fullscreen_exit_white_32dp
+                isFullscreenForIcon -> R.drawable.ic_fullscreen_exit_white_32dp
                 else -> R.drawable.ic_fullscreen_enter_white_32dp
             }
             fullscreenSwitcher.setImageResource(fullscreenDrawable)
@@ -290,6 +296,10 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     private fun updatePlaybackProgressBar() {
         val player = viewModel.playerOrNull ?: return
         val progressBar = _playerBinding?.playbackProgressBar ?: return
+        if (!appPreferences.exoPlayerShowThinProgressBar) {
+            progressBar.isVisible = false
+            return
+        }
         // Shown whenever the full controls are hidden, and always in the mini player.
         progressBar.isVisible = isMiniPlayer || !playerView.isControllerFullyVisible
         val duration = player.duration
@@ -367,12 +377,23 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     /**
+     * Whether fullscreen triggers rotate the current video: always for landscape videos, and for
+     * portrait videos only when enabled in the settings (letterboxed in landscape, see
+     * [PlayerGestureHelper.handleConfiguration]). With the setting off, portrait videos fall back
+     * to only toggling the system bars.
+     */
+    private val fullscreenTogglesOrientation: Boolean
+        get() = isCurrentVideoLandscape || appPreferences.exoPlayerRotatePortraitVideos
+
+    /**
      * Toggle fullscreen by rotating between portrait and landscape orientation.
-     *
-     * This applies to all videos, including portrait ones, which are letterboxed in landscape
-     * (see [PlayerGestureHelper.handleConfiguration]).
      */
     private fun toggleFullscreen() {
+        if (!fullscreenTogglesOrientation) {
+            // Portrait video with rotation disabled: only toggle the system bars
+            playerFullscreenHelper.toggleFullscreen()
+            return
+        }
         val current = resources.configuration.orientation
         requireActivity().requestedOrientation = when (current) {
             Configuration.ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -391,6 +412,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
      * This applies to all videos, including portrait ones.
      */
     fun setFullscreenBySwipe(fullscreen: Boolean) {
+        if (!fullscreenTogglesOrientation) {
+            // Portrait video with rotation disabled: only toggle the system bars
+            if (fullscreen) playerFullscreenHelper.enableFullscreen() else playerFullscreenHelper.disableFullscreen()
+            return
+        }
         if (fullscreen == isLandscape()) {
             // Already in the requested state
             return
@@ -409,6 +435,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
      * underneath becomes visible and interactive while the video keeps playing.
      */
     fun enterMiniPlayer() {
+        if (!appPreferences.exoPlayerAllowMiniPlayer) return
         if (isMiniPlayer || _playerBinding == null) return
         isMiniPlayer = true
 
@@ -439,7 +466,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerBinding.miniPlayerControls.isVisible = true
 
         // Keep the thin progress bar pinned to the bottom of the mini window (no system-bar offset)
-        playerBinding.playbackProgressBar.isVisible = true
+        playerBinding.playbackProgressBar.isVisible = appPreferences.exoPlayerShowThinProgressBar
         playerBinding.playbackProgressBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             bottomMargin = 0
         }
@@ -460,7 +487,8 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
         // Restore the progress bar's system-bar offset and visibility for full-screen playback
         ViewCompat.requestApplyInsets(playerBinding.root)
-        playerBinding.playbackProgressBar.isVisible = !playerView.isControllerFullyVisible
+        playerBinding.playbackProgressBar.isVisible =
+            appPreferences.exoPlayerShowThinProgressBar && !playerView.isControllerFullyVisible
 
         // Reapply the full-player system bar / orientation state for the current video
         updateFullscreenState(resources.configuration)
