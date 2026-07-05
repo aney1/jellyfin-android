@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient.FileChooserParams
 import android.webkit.WebView
@@ -15,6 +16,8 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -62,6 +65,13 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
     lateinit var server: ServerEntity
         private set
     private var connected = false
+
+    // Whether the web client is currently scrolled to the very top, reported from JS.
+    // The web client scrolls inner containers rather than the WebView itself, so
+    // [WebView.scrollY] alone can't tell us when a pull-down should trigger a refresh.
+    @Volatile
+    private var webAppScrolledToTop = true
+
     private val timeoutRunnable = Runnable {
         handleError()
     }
@@ -102,6 +112,11 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
                 runOnUiThread {
                     webViewBinding.loadingContainer.isVisible = false
                     webView.fadeIn()
+                    // The webapp is ready: enable pull-to-refresh and stop any running refresh
+                    webViewBinding.swipeRefreshLayout.isEnabled = true
+                    webViewBinding.swipeRefreshLayout.isRefreshing = false
+                    // Track the web client's real scroll position for pull-to-refresh
+                    webView.evaluateJavascript(SCROLL_TRACKING_SCRIPT, null)
                 }
                 requestNoBatteryOptimizations(webViewBinding.root)
             }
@@ -123,8 +138,12 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         super.onViewCreated(view, savedInstanceState)
         val webView = webViewBinding!!.webView
 
-        // Apply window insets
-        webView.applyWindowInsetsAsMargins()
+        // Apply window insets to the SwipeRefreshLayout, which is the direct child of the
+        // CoordinatorLayout and therefore has MarginLayoutParams (the WebView inside it does not).
+        webViewBinding!!.swipeRefreshLayout.applyWindowInsetsAsMargins()
+        // Consume the insets on the WebView so the web client doesn't add its own status-bar
+        // padding on top of the margin above (which would leave an empty band at the top).
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { _, _ -> WindowInsetsCompat.CONSUMED }
 
         // Setup exclusion rects for gestures
         if (AndroidVersion.isAtLeastQ) {
@@ -152,6 +171,17 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
 
         // Setup WebView
         webView.initialize()
+
+        // Setup pull-to-refresh. Only allow it when the webapp is scrolled to the top
+        // (so list screens like playlists can be refreshed without hijacking normal scrolling).
+        webViewBinding!!.swipeRefreshLayout.apply {
+            setColorSchemeResources(R.color.jellyfin_accent)
+            isEnabled = connected
+            setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 || !webAppScrolledToTop }
+            setOnRefreshListener {
+                webView.reload()
+            }
+        }
 
         webViewBinding!!.useDifferentServerButton.setOnClickListener {
             webView.removeCallbacks(timeoutRunnable)
@@ -189,6 +219,7 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         addJavascriptInterface(nativePlayer, "NativePlayer")
         addJavascriptInterface(externalPlayer, "ExternalPlayer")
         addJavascriptInterface(mediaSegments, "MediaSegments")
+        addJavascriptInterface(WebAppScrollReporter(), "NativeScrollReporter")
 
         loadUrl(server.hostname)
         postDelayed(timeoutRunnable, Constants.INITIAL_CONNECTION_TIMEOUT)
@@ -262,5 +293,56 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
     override fun onShowFileChooser(intent: Intent, filePathCallback: ValueCallback<Array<Uri>>) {
         fileChooserCallback = filePathCallback
         fileChooserActivityLauncher.launch(intent)
+    }
+
+    /**
+     * Receives scroll position updates from the web client so that pull-to-refresh only
+     * engages when the user is genuinely scrolled to the top. Methods are invoked on a
+     * background (JS bridge) thread.
+     */
+    private inner class WebAppScrollReporter {
+        @JavascriptInterface
+        fun setScrolledToTop(atTop: Boolean) {
+            webAppScrolledToTop = atTop
+        }
+    }
+
+    companion object {
+        /**
+         * Tracks the scroll position of whichever element the web client scrolls (it scrolls
+         * inner containers, not the document) and reports whether it is at the top. Resets to
+         * the top on SPA navigation so a fresh page is immediately refreshable.
+         */
+        private val SCROLL_TRACKING_SCRIPT =
+            """
+            (function () {
+                if (window.__jellyfinPullToRefresh) return;
+                window.__jellyfinPullToRefresh = true;
+                var lastScrollTop = 0;
+                function report() {
+                    try {
+                        NativeScrollReporter.setScrolledToTop(lastScrollTop <= 0);
+                    } catch (e) {}
+                }
+                function onScroll(event) {
+                    var target = event.target;
+                    if (target === document || target === window || target === document.documentElement) {
+                        var scroller = document.scrollingElement || document.documentElement;
+                        lastScrollTop = scroller ? scroller.scrollTop : 0;
+                    } else if (target && typeof target.scrollTop === 'number') {
+                        lastScrollTop = target.scrollTop;
+                    }
+                    report();
+                }
+                function reset() {
+                    lastScrollTop = 0;
+                    report();
+                }
+                window.addEventListener('scroll', onScroll, true);
+                window.addEventListener('hashchange', reset);
+                window.addEventListener('popstate', reset);
+                reset();
+            })();
+            """.trimIndent()
     }
 }
