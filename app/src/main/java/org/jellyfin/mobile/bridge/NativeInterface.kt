@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import org.jellyfin.mobile.BuildConfig
+import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -48,6 +49,27 @@ class NativeInterface(private val context: Context) : KoinComponent {
     private val activityEventHandler: ActivityEventHandler = get()
     private val remoteVolumeProvider: RemoteVolumeProvider by inject()
     private val deviceProfileBuilder: DeviceProfileBuilder by inject()
+    private val appPreferences: AppPreferences by inject()
+
+    /**
+     * Whether the injected "Playlist" home tab shortcut should be installed (app setting).
+     */
+    @JavascriptInterface
+    fun isHomeShortcutEnabled(): Boolean =
+        appPreferences.webHomePlaylistShortcut && BuildConfig.HOME_PLAYLIST_NAME.isNotBlank()
+
+    /**
+     * Name of the playlist the injected home-tab shortcut points at.
+     * Configured at build time; blank when unset, which hides the shortcut.
+     */
+    @JavascriptInterface
+    fun getHomePlaylistName(): String = BuildConfig.HOME_PLAYLIST_NAME
+
+    /**
+     * Whether the injected Media Archive tab should be installed (app setting).
+     */
+    @JavascriptInterface
+    fun isMediaArchiveTabEnabled(): Boolean = appPreferences.webMediaArchiveTab
 
     @SuppressLint("HardwareIds")
     @JavascriptInterface
