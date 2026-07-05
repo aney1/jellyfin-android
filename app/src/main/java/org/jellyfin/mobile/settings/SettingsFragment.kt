@@ -55,6 +55,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     private val settingsAdapter: PreferencesAdapter by lazy { PreferencesAdapter(buildSettingsScreen()) }
     private lateinit var startLandscapeVideoInLandscapePreference: CheckBoxPreference
     private lateinit var swipeGesturesPreference: CheckBoxPreference
+    private lateinit var fullscreenSwipeGesturePreference: CheckBoxPreference
     private lateinit var pressSpeedUpPreference: CheckBoxPreference
     private lateinit var rememberBrightnessPreference: Preference
     private lateinit var backgroundAudioPreference: Preference
@@ -123,6 +124,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
             defaultOnSelectionChange { selection ->
                 startLandscapeVideoInLandscapePreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 swipeGesturesPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                fullscreenSwipeGesturePreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 rememberBrightnessPreference.enabled = selection == VideoPlayerType.EXO_PLAYER && swipeGesturesPreference.checked
                 pressSpeedUpPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 backgroundAudioPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
@@ -143,6 +145,12 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
             defaultOnCheckedChange { checked ->
                 rememberBrightnessPreference.enabled = checked
             }
+        }
+        fullscreenSwipeGesturePreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_FULLSCREEN_SWIPE_GESTURE) {
+            titleRes = R.string.pref_exoplayer_allow_fullscreen_swipe_gesture
+            summaryRes = R.string.pref_exoplayer_allow_fullscreen_swipe_gesture_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+            defaultValue = true
         }
         rememberBrightnessPreference = checkBox(Constants.PREF_EXOPLAYER_REMEMBER_BRIGHTNESS) {
             titleRes = R.string.pref_exoplayer_remember_brightness

@@ -34,6 +34,7 @@ object Constants {
     const val PREF_VIDEO_PLAYER_TYPE = "pref_video_player_type"
     const val PREF_EXOPLAYER_START_LANDSCAPE_VIDEO_IN_LANDSCAPE = "pref_exoplayer_start_landscape_video_in_landscape"
     const val PREF_EXOPLAYER_ALLOW_SWIPE_GESTURES = "pref_exoplayer_allow_swipe_gestures"
+    const val PREF_EXOPLAYER_ALLOW_FULLSCREEN_SWIPE_GESTURE = "pref_exoplayer_allow_fullscreen_swipe_gesture"
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
     const val PREF_EXOPLAYER_REMEMBER_BRIGHTNESS = "pref_exoplayer_remember_brightness"
     const val PREF_EXOPLAYER_BRIGHTNESS = "pref_exoplayer_brightness"
@@ -124,6 +125,12 @@ object Constants {
     const val MAX_SKIP_TO_PREV_MS = 3000L
     const val DOUBLE_TAP_RIPPLE_DURATION_MS = 100L
     const val FULL_SWIPE_RANGE_SCREEN_RATIO = 0.66f
+
+    /**
+     * Fraction of the screen height a vertical swipe in the center region has to cover
+     * before the fullscreen/portrait toggle is triggered.
+     */
+    const val FULLSCREEN_SWIPE_RANGE_SCREEN_RATIO = 0.2f
     const val SCREEN_BRIGHTNESS_MAX = 255
     const val HOLD_SPEEDUP_MULTIPLIER = 3f
     const val ZOOM_SCALE_BASE = 1f

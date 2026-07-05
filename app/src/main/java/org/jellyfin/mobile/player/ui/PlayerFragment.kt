@@ -291,6 +291,33 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     /**
+     * Directional variant of [toggleFullscreen] used by the center swipe gesture.
+     *
+     * Swiping up ([fullscreen] = true) enters fullscreen, rotating to landscape for landscape
+     * videos. Swiping down ([fullscreen] = false) leaves fullscreen, rotating back to portrait.
+     */
+    fun setFullscreenBySwipe(fullscreen: Boolean) {
+        val videoTrack = currentVideoStream
+        if (videoTrack == null || videoTrack.isLandscape) {
+            val isCurrentlyLandscape = isLandscape()
+            if (fullscreen == isCurrentlyLandscape) {
+                // Already in the requested state
+                return
+            }
+            requireActivity().requestedOrientation = if (fullscreen) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            // The configuration change triggers updateFullscreenState, which updates the
+            // fullscreen state and switcher icon for us.
+        } else {
+            // Portrait video: only toggle the system bars without rotating
+            if (fullscreen) playerFullscreenHelper.enableFullscreen() else playerFullscreenHelper.disableFullscreen()
+        }
+    }
+
+    /**
      * If true, the player controls will show indefinitely
      */
     fun suppressControllerAutoHide(suppress: Boolean) {
@@ -462,6 +489,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         Handler(Looper.getMainLooper()).post {
             updateFullscreenState(newConfig)
             playerGestureHelper.handleConfiguration(newConfig)
+            // A gesture-driven orientation change can leave the controls stuck visible: the
+            // interrupted touch cancels their auto-hide timer and it's never re-posted. Re-show
+            // while visible to re-arm the timeout so they fade out as expected.
+            if (playerView.isControllerFullyVisible) {
+                playerView.showController()
+            }
         }
     }
 
