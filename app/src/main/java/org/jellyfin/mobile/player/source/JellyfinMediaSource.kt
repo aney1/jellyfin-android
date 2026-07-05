@@ -24,6 +24,22 @@ class JellyfinMediaSource(
     val id: String = requireNotNull(sourceInfo.id) { "Media source has no id" }
     val name: String = item?.name ?: sourceInfo.name.orEmpty()
 
+    /**
+     * The YouTube video id extracted from the source's file name, or null if it doesn't look like
+     * an archived YouTube video. Supports files named by video id (as created by TubeArchivist,
+     * e.g. `dQw4w9WgXcQ.mp4`) and yt-dlp style names with the id in brackets
+     * (e.g. `Title [dQw4w9WgXcQ].mp4`).
+     */
+    val youTubeVideoId: String? by lazy {
+        val path = item?.path ?: sourceInfo.path ?: sourceInfo.name ?: return@lazy null
+        val fileName = path.substringAfterLast('/').substringAfterLast('\\')
+        val stem = fileName.substringBeforeLast('.')
+        when {
+            YOUTUBE_ID_REGEX.matches(stem) -> stem
+            else -> YOUTUBE_ID_BRACKET_REGEX.find(fileName)?.groupValues?.get(1)
+        }
+    }
+
     val playMethod: PlayMethod = when {
         sourceInfo.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
         sourceInfo.supportsDirectStream -> PlayMethod.DIRECT_STREAM
@@ -162,5 +178,10 @@ class JellyfinMediaSource(
             }
         }
         throw IllegalArgumentException("Invalid media stream")
+    }
+
+    companion object {
+        private val YOUTUBE_ID_REGEX = Regex("^[A-Za-z0-9_-]{11}$")
+        private val YOUTUBE_ID_BRACKET_REGEX = Regex("\\[([A-Za-z0-9_-]{11})]")
     }
 }
