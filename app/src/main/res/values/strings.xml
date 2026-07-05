@@ -103,6 +103,8 @@
     <string name="video_player_external_description">External video playback apps like MX Player and VLC</string>
     <string name="pref_exoplayer_start_landscape_video_in_landscape">Start landscape mode videos in landscape orientation</string>
     <string name="pref_exoplayer_allow_brightness_volume_gesture">Brightness and volume gestures</string>
+    <string name="pref_exoplayer_allow_fullscreen_swipe_gesture">Swipe to toggle fullscreen</string>
+    <string name="pref_exoplayer_allow_fullscreen_swipe_gesture_summary">Swipe up in the center of the screen to go fullscreen, swipe down to return to portrait</string>
     <string name="pref_exoplayer_remember_brightness">Remember display brightness</string>
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
     <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the screen to temporarily speed up playback</string>
