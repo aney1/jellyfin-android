@@ -13,6 +13,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.getSystemService
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.postDelayed
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -84,6 +86,24 @@ class PlayerGestureHelper(
      * Tracks total duration of current media.
      */
     private var mediaDuration = 0L
+
+    /**
+     * True from ACTION_DOWN until ACTION_UP/CANCEL while the gesture started within the system's
+     * left back-gesture zone. Such touches are ignored entirely (not routed to any gesture
+     * detector), so the player controls can never open as a side effect of a back-navigation
+     * swipe that the OS lets fall through to the app.
+     */
+    private var leftEdgeGestureActive = false
+
+    /**
+     * The width of the system's left back-gesture zone, or 0 when gesture navigation is disabled
+     * (e.g. 3-button navigation), in which case no touches are suppressed.
+     */
+    private val leftBackGestureZoneWidth: Int
+        get() = ViewCompat.getRootWindowInsets(playerView)
+            ?.getInsets(WindowInsetsCompat.Type.systemGestures())
+            ?.left
+            ?: 0
 
     /**
      * Runnable that hides [playerView] controller
@@ -369,15 +389,21 @@ class PlayerGestureHelper(
     init {
         @Suppress("ClickableViewAccessibility")
         playerView.setOnTouchListener { _, event ->
-            if (playerView.useController) {
-                when (event.pointerCount) {
-                    1 -> gestureDetector.onTouchEvent(event)
-                    2 -> zoomGestureDetector.onTouchEvent(event)
-                }
-            } else {
-                unlockDetector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                leftEdgeGestureActive = event.x < leftBackGestureZoneWidth
             }
-            if (event.action == MotionEvent.ACTION_UP) {
+            if (!leftEdgeGestureActive) {
+                if (playerView.useController) {
+                    when (event.pointerCount) {
+                        1 -> gestureDetector.onTouchEvent(event)
+                        2 -> zoomGestureDetector.onTouchEvent(event)
+                    }
+                } else {
+                    unlockDetector.onTouchEvent(event)
+                }
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                leftEdgeGestureActive = false
                 if (isOnPressingSpeedUp) {
                     isOnPressingSpeedUp = false
                     with(fragment) {
