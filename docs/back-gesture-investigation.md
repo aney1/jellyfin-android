@@ -1,7 +1,7 @@
 # Android Back Gesture Investigation — Player Screen
 
 **Branch:** `feature/media-segments-on-2.6.4`  
-**Status:** Unresolved — investigation parked for later
+**Status:** ROOT CAUSE FOUND — see "Root Cause" at the bottom. The player was never the culprit.
 
 ## Problem
 
@@ -100,6 +100,56 @@ This would explain:
 
 1. **Verify on a stock Android device.** If it works there but not on Samsung, the root cause is
    Samsung-specific and needs a Samsung-specific workaround.
+
+---
+
+## Current Attempt (July 2026)
+
+**Important context:** both attempts above were only ever tested on the Samsung tablet, never on
+a Pixel or the emulator. On stock Android they may well have worked. Priority is now the Pixel;
+Samsung is optional.
+
+Both attempts were re-applied together, with one improvement:
+
+1. **Attempt 1 re-applied as-is** (`PlayerFragment.onViewCreated`): clear the `DefaultTimeBar`
+   system gesture exclusion rects after every layout pass. Even if the time bar's rect doesn't
+   cover the edge in the current layout, this guarantees no exclusion rect can ever block the
+   system back gesture on stock Android.
+2. **Attempt 2 re-applied with a fix** (`PlayerGestureHelper`): touches starting inside the left
+   back-gesture zone are ignored (not routed to any gesture detector), so the controls can't open
+   as a side effect. Instead of a hardcoded 24 dp, the zone width now comes from the actual system
+   gesture insets (`WindowInsetsCompat.Type.systemGestures().left`). This also means the
+   suppression is automatically inactive with 3-button navigation (inset = 0), where left-edge
+   taps are legitimate taps.
+
+If this works on the Pixel but the Samsung tablet still misbehaves, the Samsung-specific root
+cause (suspected Edge Panel interception, see above) remains open — acceptable per priorities.
+
+---
+
+## Root Cause (found July 2026)
+
+**`WebViewFragment.onViewCreated` deliberately set a system gesture exclusion rect on the
+WebView**: left edge, 96 dp wide, 200 dp tall centered vertically (upstream code, added so the
+web app's navigation drawer could be opened by edge swipe). This matches the symptom exactly —
+back worked at the top-left and bottom-left but not in the 200 dp mid-band.
+
+It also explains the player screen: `PlayerFragment` is added *on top of* `WebViewFragment`, whose
+view stays attached and visible underneath, so its exclusion rect kept applying during native
+video playback. All player-side theories (DefaultTimeBar rects, gesture detector, Samsung Edge
+Panel) were red herrings — the key observation that cracked it was that the "menu" opening on
+left-edge swipe was the **web app's navigation drawer**, not the player controls, and that it
+also happened with no video playing.
+
+**Fix:** the exclusion rect block in `WebViewFragment` was removed. The drawer edge-swipe is gone
+(the drawer is opened via its button) and the system back gesture works on the whole left edge,
+with or without a video playing. Verified working on the Pixel.
+
+Of the player-side mitigations, only the left-edge touch suppression in `PlayerGestureHelper` was
+kept: it guarantees the player controls cannot open as a side effect of a short or aborted edge
+swipe that the system doesn't claim (the zone width follows the system gesture insets, so it is
+inactive with 3-button navigation). The `DefaultTimeBar` exclusion-rect clearing was dropped
+again — per Attempt 1's analysis it is a no-op, since the time bar never covers the edge zone.
 2. **Inspect exclusion rects at runtime.** Use `adb shell dumpsys input` or add a debug overlay
    that iterates the view tree and prints all exclusion rects to logcat when the player is running.
    This would reveal whether any view actually has a conflicting rect.

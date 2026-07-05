@@ -13,6 +13,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import androidx.core.content.getSystemService
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.postDelayed
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
@@ -82,6 +84,24 @@ class PlayerGestureHelper(
      * current center swipe gesture, so it only fires once per swipe.
      */
     private var swipeGestureFullscreenTriggered = false
+
+    /**
+     * True from ACTION_DOWN until ACTION_UP/CANCEL while the gesture started within the system's
+     * left back-gesture zone. Such touches are ignored entirely (not routed to any gesture
+     * detector), so the player controls can never open as a side effect of a back-navigation
+     * swipe that the OS lets fall through to the app.
+     */
+    private var leftEdgeGestureActive = false
+
+    /**
+     * The width of the system's left back-gesture zone, or 0 when gesture navigation is disabled
+     * (e.g. 3-button navigation), in which case no touches are suppressed.
+     */
+    private val leftBackGestureZoneWidth: Int
+        get() = ViewCompat.getRootWindowInsets(playerView)
+            ?.getInsets(WindowInsetsCompat.Type.systemGestures())
+            ?.left
+            ?: 0
 
     /**
      * The region a swipe gesture operates on, locked when the gesture starts.
@@ -272,15 +292,21 @@ class PlayerGestureHelper(
     init {
         @Suppress("ClickableViewAccessibility")
         playerView.setOnTouchListener { _, event ->
-            if (playerView.useController) {
-                when (event.pointerCount) {
-                    1 -> gestureDetector.onTouchEvent(event)
-                    2 -> zoomGestureDetector.onTouchEvent(event)
-                }
-            } else {
-                unlockDetector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                leftEdgeGestureActive = event.x < leftBackGestureZoneWidth
             }
-            if (event.action == MotionEvent.ACTION_UP) {
+            if (!leftEdgeGestureActive) {
+                if (playerView.useController) {
+                    when (event.pointerCount) {
+                        1 -> gestureDetector.onTouchEvent(event)
+                        2 -> zoomGestureDetector.onTouchEvent(event)
+                    }
+                } else {
+                    unlockDetector.onTouchEvent(event)
+                }
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                leftEdgeGestureActive = false
                 // Hide gesture indicator after timeout, if shown
                 gestureIndicatorOverlayLayout.apply {
                     if (isVisible) {
