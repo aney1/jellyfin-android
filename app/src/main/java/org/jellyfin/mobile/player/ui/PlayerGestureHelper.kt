@@ -408,6 +408,14 @@ class PlayerGestureHelper(
         if (!fragment.isLandscape(newConfig) && freeformZoomActive) {
             exitFreeformZoom()
         }
+        // Portrait videos must always be letterboxed (fit) after a rotation - filling the screen
+        // would crop away most of the frame in landscape.
+        if (!fragment.isCurrentVideoLandscape) {
+            isZoomEnabled = false
+            if (freeformZoomActive) {
+                exitFreeformZoom()
+            }
+        }
         updateZoomMode(fragment.isLandscape(newConfig) && isZoomEnabled)
     }
 

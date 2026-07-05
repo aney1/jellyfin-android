@@ -97,6 +97,12 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         get() = viewModel.mediaSourceOrNull?.selectedVideoStream
 
     /**
+     * Whether the currently playing video is landscape (or unknown, which is treated as landscape).
+     */
+    val isCurrentVideoLandscape: Boolean
+        get() = currentVideoStream?.isLandscape != false
+
+    /**
      * Listener that watches the current device orientation.
      * It makes sure that the orientation sensor can still be used (if enabled)
      * after toggling the orientation through the fullscreen button.
@@ -239,9 +245,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             }
             playerOverlay.updatePadding(systemInsets.left, systemInsets.top, systemInsets.right, systemInsets.bottom)
 
-            // Update fullscreen switcher icon
+            // Update fullscreen switcher icon. The switcher toggles the orientation, so the icon
+            // reflects the orientation rather than the system bar visibility - for portrait videos
+            // the bars are already hidden in portrait, yet the button still enters landscape.
             fullscreenSwitcher.setImageResource(
-                if (playerFullscreenHelper.isFullscreen) R.drawable.ic_fullscreen_exit_white_32dp else R.drawable.ic_fullscreen_enter_white_32dp,
+                if (isLandscape()) R.drawable.ic_fullscreen_exit_white_32dp else R.drawable.ic_fullscreen_enter_white_32dp,
             )
 
             // Keep the thin progress bar above the system bars (no offset in fullscreen)
@@ -343,52 +351,41 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     /**
-     * Toggle fullscreen.
+     * Toggle fullscreen by rotating between portrait and landscape orientation.
      *
-     * If playing a portrait video, this just hides the status and navigation bars.
-     * For landscape videos, additionally the screen gets rotated.
+     * This applies to all videos, including portrait ones, which are letterboxed in landscape
+     * (see [PlayerGestureHelper.handleConfiguration]).
      */
     private fun toggleFullscreen() {
-        val videoTrack = currentVideoStream
-        if (videoTrack == null || videoTrack.isLandscape) {
-            val current = resources.configuration.orientation
-            requireActivity().requestedOrientation = when (current) {
-                Configuration.ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            }
-            // No need to call playerFullscreenHelper in this case,
-            // since the configuration change triggers updateFullscreenState,
-            // which does it for us.
-        } else {
-            playerFullscreenHelper.toggleFullscreen()
+        val current = resources.configuration.orientation
+        requireActivity().requestedOrientation = when (current) {
+            Configuration.ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
+        // No need to call playerFullscreenHelper in this case,
+        // since the configuration change triggers updateFullscreenState,
+        // which does it for us.
     }
 
     /**
      * Directional variant of [toggleFullscreen] used by the center swipe gesture.
      *
-     * Swiping up ([fullscreen] = true) enters fullscreen, rotating to landscape for landscape
-     * videos. Swiping down ([fullscreen] = false) leaves fullscreen, rotating back to portrait.
+     * Swiping up ([fullscreen] = true) enters fullscreen by rotating to landscape.
+     * Swiping down ([fullscreen] = false) leaves fullscreen, rotating back to portrait.
+     * This applies to all videos, including portrait ones.
      */
     fun setFullscreenBySwipe(fullscreen: Boolean) {
-        val videoTrack = currentVideoStream
-        if (videoTrack == null || videoTrack.isLandscape) {
-            val isCurrentlyLandscape = isLandscape()
-            if (fullscreen == isCurrentlyLandscape) {
-                // Already in the requested state
-                return
-            }
-            requireActivity().requestedOrientation = if (fullscreen) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            }
-            // The configuration change triggers updateFullscreenState, which updates the
-            // fullscreen state and switcher icon for us.
-        } else {
-            // Portrait video: only toggle the system bars without rotating
-            if (fullscreen) playerFullscreenHelper.enableFullscreen() else playerFullscreenHelper.disableFullscreen()
+        if (fullscreen == isLandscape()) {
+            // Already in the requested state
+            return
         }
+        requireActivity().requestedOrientation = if (fullscreen) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        // The configuration change triggers updateFullscreenState, which updates the
+        // fullscreen state and switcher icon for us.
     }
 
     /**
