@@ -261,7 +261,7 @@ class PlayerMenus(
         updateSubtitlesButton()
 
         youTubeVideoId = mediaSource.youTubeVideoId
-        youtubeButton.isVisible = youTubeVideoId != null
+        youtubeButton.isVisible = youTubeVideoId != null && appPreferences.exoPlayerShowYouTubeButton
 
         val height = videoStream?.height
         val width = videoStream?.width
