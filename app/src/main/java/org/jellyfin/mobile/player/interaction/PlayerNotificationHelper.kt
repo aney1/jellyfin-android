@@ -38,6 +38,7 @@ import org.jellyfin.sdk.model.api.ImageType
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 
 class PlayerNotificationHelper(private val viewModel: PlayerViewModel) : KoinComponent {
@@ -47,6 +48,7 @@ class PlayerNotificationHelper(private val viewModel: PlayerViewModel) : KoinCom
     private val imageApi: ImageApi = get<ApiClient>().imageApi
     private val imageLoader: ImageLoader by inject()
     private val receiverRegistered = AtomicBoolean(false)
+    private val foregroundServiceStarted = AtomicBoolean(false)
 
     val allowBackgroundAudio: Boolean
         get() = appPreferences.exoPlayerAllowBackgroundAudio
@@ -128,6 +130,19 @@ class PlayerNotificationHelper(private val viewModel: PlayerViewModel) : KoinCom
             }.build()
 
             nm.notify(VIDEO_PLAYER_NOTIFICATION_ID, notification)
+
+            // Promote the notification to a foreground service, so that the system doesn't
+            // freeze the app process (and thereby playback) shortly after the screen is locked
+            if (allowBackgroundAudio && foregroundServiceStarted.compareAndSet(false, true)) {
+                try {
+                    val intent = Intent(context, PlayerForegroundService::class.java)
+                    ContextCompat.startForegroundService(context, intent)
+                } catch (e: IllegalStateException) {
+                    // Thrown when the app is not allowed to start a foreground service (app in background)
+                    foregroundServiceStarted.set(false)
+                    Timber.w(e, "Failed to start player foreground service")
+                }
+            }
         }
 
         if (receiverRegistered.compareAndSet(false, true)) {
@@ -145,6 +160,11 @@ class PlayerNotificationHelper(private val viewModel: PlayerViewModel) : KoinCom
     }
 
     fun dismissNotification() {
+        // Stop the foreground service first - while it is active,
+        // its notification cannot be cancelled through the NotificationManager
+        if (foregroundServiceStarted.compareAndSet(true, false)) {
+            context.stopService(Intent(context, PlayerForegroundService::class.java))
+        }
         notificationManager?.cancel(VIDEO_PLAYER_NOTIFICATION_ID)
         if (receiverRegistered.compareAndSet(true, false)) {
             context.unregisterReceiver(notificationActionReceiver)
