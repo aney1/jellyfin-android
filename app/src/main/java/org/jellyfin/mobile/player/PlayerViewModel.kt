@@ -297,6 +297,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }.build().apply {
             addListener(this@PlayerViewModel)
             applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MOVIE)
+            // Hold wake and WiFi locks during playback, so that background
+            // playback doesn't stall when the device tries to sleep
+            setWakeMode(C.WAKE_MODE_NETWORK)
             // Restore the last used playback speed
             playbackParameters = playbackParameters.withSpeed(appPreferences.exoPlayerPlaybackSpeed)
         }
