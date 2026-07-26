@@ -118,6 +118,11 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
             summaryRes = R.string.pref_web_home_playlist_shortcut_summary
             defaultValue = true
         }
+        checkBox(Constants.PREF_WEB_EXTERNAL_LINKS_MENU) {
+            titleRes = R.string.pref_web_external_links_menu
+            summaryRes = R.string.pref_web_external_links_menu_summary
+            defaultValue = true
+        }
         categoryHeader(PREF_CATEGORY_MUSIC_PLAYER) {
             titleRes = R.string.pref_category_music_player
         }

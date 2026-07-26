@@ -50,6 +50,7 @@ object Constants {
     const val PREF_WEB_PULL_TO_REFRESH = "pref_web_pull_to_refresh"
     const val PREF_WEB_MEDIA_ARCHIVE_TAB = "pref_web_media_archive_tab"
     const val PREF_WEB_HOME_PLAYLIST_SHORTCUT = "pref_web_home_playlist_shortcut"
+    const val PREF_WEB_EXTERNAL_LINKS_MENU = "pref_web_external_links_menu"
     const val PREF_EXOPLAYER_DIRECT_PLAY_ASS = "pref_exoplayer_direct_play_ass"
     const val PREF_EXOPLAYER_NETWORK_BUFFER = "pref_exoplayer_network_buffer"
     const val NETWORK_BUFFER_AUTO = "auto"

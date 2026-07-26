@@ -64,6 +64,39 @@ class NativeInterface(private val context: Context) : KoinComponent {
     @JavascriptInterface
     fun isMediaArchiveTabEnabled(): Boolean = appPreferences.webMediaArchiveTab
 
+    /**
+     * Whether the injected "Links" tab should be installed
+     * (app setting, and at least one link configured at build time).
+     */
+    @JavascriptInterface
+    fun isExternalLinksMenuEnabled(): Boolean =
+        appPreferences.webExternalLinksMenu && BuildConfig.EXTERNAL_LINKS.isNotBlank()
+
+    /**
+     * The links shown by the injected "Links" tab, as a JSON array of `{name, url}` objects.
+     *
+     * Configured at build time through the `externalLinks` property
+     * (semicolon-separated "Name|URL" pairs, see app/build.gradle.kts).
+     */
+    @JavascriptInterface
+    fun getExternalLinks(): String {
+        val links = JSONArray()
+        BuildConfig.EXTERNAL_LINKS.split(';').forEach { entry ->
+            val parts = entry.split('|', limit = 2)
+            val name = parts.getOrNull(0)?.trim().orEmpty()
+            val url = parts.getOrNull(1)?.trim().orEmpty()
+            if (name.isNotEmpty() && url.isNotEmpty()) {
+                links.put(
+                    JSONObject().apply {
+                        put("name", name)
+                        put("url", url)
+                    },
+                )
+            }
+        }
+        return links.toString()
+    }
+
     @SuppressLint("HardwareIds")
     @JavascriptInterface
     fun getDeviceInformation(): String? = try {

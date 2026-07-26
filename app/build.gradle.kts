@@ -51,6 +51,19 @@ val mediaArchiveUrl: String = run {
         ?: ""
 }
 
+// Links shown by the injected "Links" home tab as semicolon-separated "Name|URL" pairs, e.g.
+// `externalLinks=First|https://first.example.com;Second|https://second.example.com`. Kept out
+// of source so the public repo doesn't contain private addresses; set `externalLinks` in
+// local.properties (gitignored), or pass -PexternalLinks / the EXTERNAL_LINKS env var.
+val externalLinks: String = run {
+    val localProperties = Properties()
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(localProperties::load)
+    localProperties.getProperty("externalLinks")
+        ?: (project.findProperty("externalLinks") as String?)
+        ?: System.getenv("EXTERNAL_LINKS")
+        ?: ""
+}
+
 android {
     namespace = "org.jellyfin.mobile"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -64,6 +77,11 @@ android {
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "HOME_PLAYLIST_NAME", "\"$homePlaylistName\"")
         buildConfigField("String", "MEDIA_ARCHIVE_URL", "\"$mediaArchiveUrl\"")
+        buildConfigField(
+            "String",
+            "EXTERNAL_LINKS",
+            "\"${externalLinks.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
+        )
     }
 
     signingConfigs {

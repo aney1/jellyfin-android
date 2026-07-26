@@ -11,6 +11,9 @@
         if (window.NativeInterface && NativeInterface.isMediaArchiveTabEnabled()) {
             scripts.push('/native/MediaArchiveTab.js');
         }
+        if (window.NativeInterface && NativeInterface.isExternalLinksMenuEnabled()) {
+            scripts.push('/native/ExternalLinksTab.js');
+        }
     } catch (e) {
         // Bridge unavailable - skip the optional tabs
     }
