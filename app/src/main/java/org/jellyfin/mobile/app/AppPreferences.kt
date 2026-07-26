@@ -160,6 +160,9 @@ class AppPreferences(context: Context) {
     val webHomePlaylistShortcut: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_WEB_HOME_PLAYLIST_SHORTCUT, true)
 
+    val webExternalLinksMenu: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_WEB_EXTERNAL_LINKS_MENU, true)
+
     val exoPlayerDirectPlayAss: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_DIRECT_PLAY_ASS, false)
 

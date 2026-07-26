@@ -7,7 +7,9 @@ import android.media.session.PlaybackState
 import android.webkit.JavascriptInterface
 import androidx.core.content.ContextCompat
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -70,6 +72,35 @@ class NativeInterface(private val context: Context) : KoinComponent {
      */
     @JavascriptInterface
     fun isMediaArchiveTabEnabled(): Boolean = appPreferences.webMediaArchiveTab
+
+    /**
+     * Whether the injected "Links" tab should be installed
+     * (app setting, and at least one link configured at build time).
+     */
+    @JavascriptInterface
+    fun isExternalLinksMenuEnabled(): Boolean =
+        appPreferences.webExternalLinksMenu && BuildConfig.EXTERNAL_LINKS.isNotBlank()
+
+    /**
+     * The links shown by the injected "Links" tab, as a JSON array of `{name, url}` objects.
+     *
+     * Configured at build time through the `externalLinks` property
+     * (semicolon-separated "Name|URL" pairs, see app/build.gradle.kts).
+     */
+    @JavascriptInterface
+    fun getExternalLinks(): String = buildJsonArray {
+        BuildConfig.EXTERNAL_LINKS.split(';').forEach { entry ->
+            val parts = entry.split('|', limit = 2)
+            val name = parts.getOrNull(0)?.trim().orEmpty()
+            val url = parts.getOrNull(1)?.trim().orEmpty()
+            if (name.isNotEmpty() && url.isNotEmpty()) {
+                addJsonObject {
+                    put("name", name)
+                    put("url", url)
+                }
+            }
+        }
+    }.toString()
 
     @SuppressLint("HardwareIds")
     @JavascriptInterface

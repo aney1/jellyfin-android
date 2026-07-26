@@ -99,6 +99,8 @@
     <string name="pref_web_media_archive_tab_summary">Show the Media Archive tab in the web interface (takes effect after reloading the web app)</string>
     <string name="pref_web_home_playlist_shortcut">Playlist home shortcut</string>
     <string name="pref_web_home_playlist_shortcut_summary">Show the configured playlist shortcut in the home tab bar (takes effect after reloading the web app)</string>
+    <string name="pref_web_external_links_menu">External links menu</string>
+    <string name="pref_web_external_links_menu_summary">Show the "Links" tab with the configured external links in the home tab bar (takes effect after reloading the web app)</string>
     <string name="pref_category_music_player">Music player</string>
     <string name="pref_music_notification_always_dismissible_title">Dismissible player notification</string>
     <string name="pref_music_notification_always_dismissible_summary_off">The notification can only be dismissed when playback is paused</string>
