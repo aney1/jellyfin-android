@@ -39,7 +39,7 @@ val homePlaylistName: String = run {
         ?: ""
 }
 
-// URL of the Media Archive instance opened by the in-app "MA" shortcut. Kept out of source so
+// URL of the Media Archive instance opened by the in-app "TA" shortcut. Kept out of source so
 // the public repo doesn't contain a private address; set `mediaArchive.url` in local.properties
 // (gitignored), or pass -PmediaArchive.url / the MEDIA_ARCHIVE_URL env var. Empty when unset.
 val mediaArchiveUrl: String = run {

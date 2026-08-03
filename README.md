@@ -56,6 +56,54 @@ Most of the translations can be found in the [web client](https://translate.jell
 This client was rewritten from scratch with a fresh git history in July to August 2020, and replaces the old Cordova-based client,
 which can still be found [in the archives](https://github.com/jellyfin-archive/jellyfin-android-original).
 
+## Fork changes
+
+This fork tracks upstream releases (currently **v2.7.0**) and adds the following on top. Most of the
+additions have a toggle in the app settings, so they can be turned off without rebuilding; the
+behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) are always on.
+
+### Video player
+
+- **Floating mini player** — shrink the native player into a corner window and keep browsing the web
+  app underneath while the video plays; tap to expand.
+- **Center swipe to toggle fullscreen** — swipe up in the middle to go fullscreen (rotating for
+  landscape videos), down to return; brightness/volume swipes move to the outer thirds.
+- **Freeform pinch zoom** — pinching past fill mode enters a photo-app-style zoom (up to 4x) with
+  panning, clamped so no gaps appear.
+- **Rotation handling** — portrait videos can be rotated into landscape, and the player follows the
+  sensor between the two landscape orientations even when the system rotation lock is on.
+- **Auto Picture-in-Picture** so PiP also triggers with gesture navigation.
+- **Playback speed** — extra 0.25x and 2.25x–3.0x steps, and the chosen speed is remembered across
+  videos and app restarts.
+- **Frame-by-frame stepping** while paused.
+- **Thin always-on progress bar** at the bottom, visible with the controls hidden.
+- **Media segments** — a replay button for skipped segments, a translucent skip button, and a bubble
+  showing the summed skip amount above the controls.
+- **Playback stays alive when the screen is locked** (audio keeps going).
+- **Queue fixes** — resume playlist/queue items from the server-saved position, and mark a video as
+  played when you actively skip past it.
+- **Back gesture fix** — removes upstream's left-edge gesture exclusion rect so the system back
+  gesture works along the whole edge; the drawer is opened by its button instead.
+
+### Web app shell
+
+- **Pull-to-refresh** on the embedded web client, triggered only when it is genuinely scrolled to
+  the top.
+- **Extra home tabs**, injected into jellyfin-web: a shortcut to a configured playlist, an archive
+  screen (labelled "TA") shown as a layered in-app WebView, and a "Links" menu of external URLs.
+- **"Open in YouTube"** button for archived videos in the player.
+
+### Configuration
+
+Deployment-specific values are not committed. Set them in `local.properties` (gitignored), or pass
+them as `-P` properties / environment variables:
+
+| Property | Purpose |
+| --- | --- |
+| `homePlaylist.name` | Playlist the home-tab shortcut points at; blank hides the tab. |
+| `mediaArchive.url` | Instance opened by the "TA" tab; blank hides the tab. |
+| `externalLinks` | Semicolon-separated `Name\|URL` pairs for the "Links" tab. |
+
 ## Build Process
 
 ### Dependencies
