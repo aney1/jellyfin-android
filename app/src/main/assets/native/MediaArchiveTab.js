@@ -1,5 +1,5 @@
 /*
- * Injects a "MA" tab next to the web client's "Home" / "Favorites" tabs that opens Media Archive
+ * Injects a "TA" tab next to the web client's "Home" / "Favorites" tabs that opens Media Archive
  * in a native in-app WebView (see MediaArchiveFragment). Media Archive sends
  * X-Frame-Options: DENY, so it can't be embedded as an iframe — it's opened as a layered screen
  * instead, via the NativeInterface bridge.
@@ -10,7 +10,7 @@
 (() => {
     'use strict';
 
-    const TAB_LABEL = 'MA';
+    const TAB_LABEL = 'TA';
     const MARKER_CLASS = 'ta-shortcut-tab';
     const POLL_INTERVAL_MS = 750;
 
