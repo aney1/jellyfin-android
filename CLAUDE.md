@@ -11,10 +11,16 @@ downloads, Android Auto) that the web layer calls into via JavaScript bridges.
 
 > **This is a fork.** This branch (`feature/custom-on-2.7.0`) is based on upstream
 > v2.7.0, which uses the **media3** player (`androidx.media3.*`), and carries the fork's
-> custom features ported from the older branch. The previous branch
-> `feature/media-segments-on-2.6.4` remains as fallback, pinned to v2.6.4 / ExoPlayer2 because
+> custom features ported from the older branch. It is the only published branch. An earlier
+> v2.6.4 / ExoPlayer2 line is kept as the local-only tag `archive/media-segments-2.6.4`, because
 > the original media3 migration broke sidecar/external subtitles for this fork's use case — if
-> that regression reappears here, the 2.6.4 branch is the reference.
+> that regression reappears here, that tag is the reference.
+
+> **Private-by-convention naming.** Nothing committed here may name software the maintainer
+> self-hosts, so the in-app archive screen is called "Media Archive" and the home-tab playlist
+> shortcut reads its target from `homePlaylist.name`. Private values (that name,
+> `mediaArchive.url`, `externalLinks`) live only in gitignored `local.properties` and reach the
+> app through `BuildConfig`; use neutral placeholders in examples.
 
 ## Build & Test Commands
 
