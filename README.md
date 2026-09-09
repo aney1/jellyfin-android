@@ -90,8 +90,10 @@ behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) ar
 
 - **Pull-to-refresh** on the embedded web client, triggered only when it is genuinely scrolled to
   the top.
-- **Extra home tabs**, injected into jellyfin-web: a shortcut to a configured playlist, an archive
-  screen (labelled "TA") shown as a layered in-app WebView, and a "Links" menu of external URLs.
+- **Extra navigation entries**, injected into jellyfin-web: a shortcut to a configured playlist, an
+  archive screen (labelled "TA") shown as a layered in-app WebView, and a "Links" menu of external
+  URLs. `NavTabInjector.js` places them in whichever navigation the server's web client renders -
+  the MUI app bar or burger drawer on Jellyfin 12.0, or the older `emby-tabs` strip before that.
 - **"Open in YouTube"** button for archived videos in the player.
 
 ### Configuration

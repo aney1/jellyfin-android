@@ -1,22 +1,19 @@
 /*
- * Injects a "TA" tab next to the web client's "Home" / "Favorites" tabs that opens Media Archive
- * in a native in-app WebView (see MediaArchiveFragment). Media Archive sends
- * X-Frame-Options: DENY, so it can't be embedded as an iframe — it's opened as a layered screen
- * instead, via the NativeInterface bridge.
+ * Injects a "TA" navigation entry that opens Media Archive in a native in-app WebView (see
+ * MediaArchiveFragment). Media Archive sends X-Frame-Options: DENY, so it can't be embedded as an
+ * iframe - it's opened as a layered screen instead, via the NativeInterface bridge.
  *
- * Mirrors HomeShortcutTab.js: the tab strip (jellyfin-web maintabsmanager.js) is rebuilt on every
- * view change, so we re-inject on a poll and on hash changes.
+ * Locating and building the entry is handled by NavTabInjector.js, which knows about both the 12.0
+ * MUI navigation and the older emby-tabs strip.
  */
 (() => {
     'use strict';
 
     const TAB_LABEL = 'TA';
     const MARKER_CLASS = 'ta-shortcut-tab';
-    const POLL_INTERVAL_MS = 750;
-
-    function isHomeRoute() {
-        return (window.location.hash || '').toLowerCase().indexOf('/home') !== -1;
-    }
+    // Material "video library".
+    const ICON_PATH = 'M4 6H2v14c0 1.1.9 2 2 2h14v-2H4zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 '
+        + '2-.9 2-2V4c0-1.1-.9-2-2-2m-9 12V6l5.5 4z';
 
     function openMediaArchive() {
         try {
@@ -28,60 +25,14 @@
         }
     }
 
-    function buildTab(templateButton) {
-        // Wrap in a plain span so emby-tabs' swipe navigation (which walks siblings carrying the
-        // emby-tab-button class) never lands on our tab.
-        const wrapper = document.createElement('span');
-        wrapper.className = MARKER_CLASS + '-wrapper';
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = templateButton.className;
-        button.classList.remove('emby-tab-button-active');
-        button.classList.add(MARKER_CLASS);
-        button.removeAttribute('data-index');
-
-        const foreground = document.createElement('div');
-        foreground.className = 'emby-button-foreground';
-        foreground.textContent = TAB_LABEL;
-        button.appendChild(foreground);
-
-        // Capture phase + stopPropagation so the bubble-phase emby-tabs click handler never runs.
-        button.addEventListener(
-            'click',
-            (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openMediaArchive();
-            },
-            true,
-        );
-
-        wrapper.appendChild(button);
-        return wrapper;
-    }
-
-    function injectTab() {
-        if (!isHomeRoute()) return;
-        const header = document.querySelector('.skinHeader .headerTabs');
-        if (!header || header.classList.contains('hide')) return;
-        const slider = header.querySelector('.emby-tabs-slider');
-        if (!slider) return;
-        if (slider.querySelector('.' + MARKER_CLASS)) return; // already injected
-        const template = slider.querySelector('.emby-tab-button');
-        if (!template) return; // wait until the real tabs are rendered
-        slider.appendChild(buildTab(template));
-    }
-
-    function start() {
-        setInterval(injectTab, POLL_INTERVAL_MS);
-        window.addEventListener('hashchange', () => setTimeout(injectTab, 50));
-        injectTab();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
+    if (window.JellyfinNavTabs) {
+        window.JellyfinNavTabs.register({
+            label: TAB_LABEL,
+            marker: MARKER_CLASS,
+            iconPath: ICON_PATH,
+            onSelect: openMediaArchive,
+        });
     } else {
-        start();
+        console.error('[TA] NavTabInjector unavailable, entry not injected');
     }
 })();

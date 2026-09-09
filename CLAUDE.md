@@ -67,6 +67,14 @@ The app's central design is a bidirectional bridge between the web client and na
 - **native → JS**: `WebappFunctionChannel` (a coroutine `Channel<String>`) queues JS snippets that
   `WebViewFragment` drains and runs via `webView.evaluateJavascript(...)`. Used to call into
   `window.NavigationHelper` / `playbackManager` (seek, volume, back navigation, cast callbacks).
+- **Injected UI** (fork-only): `injectionScript.js` is served in place of the web client's main
+  bundle and side-loads the fork's assets from `app/src/main/assets/native/`. The three extra
+  navigation entries go through `NavTabInjector.js`, which is the one piece coupled to
+  jellyfin-web's *markup* rather than its bridge API — so it is what breaks on a server upgrade.
+  It supports Jellyfin 12.0's MUI app bar (wide) and burger drawer (narrow) plus the pre-12.0
+  `emby-tabs` strip, and clones a neighbouring entry instead of hardcoding emotion `css-*` classes.
+  Verify changes against a real server; the live DOM is reachable over
+  `adb forward` + `webview_devtools_remote_<pid>` because debug builds enable WebView debugging.
 - **Decoupling layer**: native bridge methods mostly don't act directly — they `emit` an
   `ActivityEvent` onto `ActivityEventHandler` (a `MutableSharedFlow`), which `MainActivity`
   collects and handles (`subscribe()` / `handleEvent()`). This keeps `@JavascriptInterface` code

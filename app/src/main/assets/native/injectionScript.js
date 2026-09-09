@@ -3,25 +3,34 @@
         '/native/nativeshell.js',
         '/native/EventEmitter.js'
     ];
-    // The injected tabs are toggleable in the app settings, queried through the native bridge.
+    // The injected navigation entries are toggleable in the app settings, queried through the
+    // native bridge. They share NavTabInjector.js, which must run before them.
+    const navTabs = [];
     try {
         if (window.NativeInterface && NativeInterface.isHomeShortcutEnabled()) {
-            scripts.push('/native/HomeShortcutTab.js');
+            navTabs.push('/native/HomeShortcutTab.js');
         }
         if (window.NativeInterface && NativeInterface.isMediaArchiveTabEnabled()) {
-            scripts.push('/native/MediaArchiveTab.js');
+            navTabs.push('/native/MediaArchiveTab.js');
         }
         if (window.NativeInterface && NativeInterface.isExternalLinksMenuEnabled()) {
-            scripts.push('/native/ExternalLinksTab.js');
+            navTabs.push('/native/ExternalLinksTab.js');
         }
     } catch (e) {
-        // Bridge unavailable - skip the optional tabs
+        // Bridge unavailable - skip the optional entries
+    }
+    if (navTabs.length) {
+        scripts.push('/native/NavTabInjector.js', ...navTabs);
     }
     scripts.push(document.currentScript.src.concat('?deferred=true&ts=', Date.now()));
     for (const script of scripts) {
         const scriptElement = document.createElement('script');
         scriptElement.src = script;
         scriptElement.charset = 'utf-8';
+        // Dynamically inserted scripts are async by default, which would leave the load order of
+        // the helpers, the entries that use them and the web app itself up to the network. The
+        // defer attribute does not apply to them, async = false does.
+        scriptElement.async = false;
         scriptElement.setAttribute('defer', '');
         document.body.appendChild(scriptElement);
     }
