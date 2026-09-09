@@ -9,8 +9,8 @@ Jellyfin Android (`org.jellyfin.mobile`) — a native Android wrapper around the
 `WebView` and provides native capabilities (video/audio playback, Chromecast, media session,
 downloads, Android Auto) that the web layer calls into via JavaScript bridges.
 
-> **This is a fork.** This branch (`feature/custom-on-2.7.1`) is based on upstream
-> v2.7.1, which uses the **media3** player (`androidx.media3.*`), and carries the fork's
+> **This is a fork.** This branch (`feature/custom-on-2.7.2`) is based on upstream
+> v2.7.2, which uses the **media3** player (`androidx.media3.*`), and carries the fork's
 > custom features ported from the older branch. It is the only published branch. An earlier
 > v2.6.4 / ExoPlayer2 line is kept as the local-only tag `archive/media-segments-2.6.4`, because
 > the original media3 migration broke sidecar/external subtitles for this fork's use case — if

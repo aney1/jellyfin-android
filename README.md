@@ -58,7 +58,7 @@ which can still be found [in the archives](https://github.com/jellyfin-archive/j
 
 ## Fork changes
 
-This fork tracks upstream releases (currently **v2.7.1**) and adds the following on top. Most of the
+This fork tracks upstream releases (currently **v2.7.2**) and adds the following on top. Most of the
 additions have a toggle in the app settings, so they can be turned off without rebuilding; the
 behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) are always on.
 
