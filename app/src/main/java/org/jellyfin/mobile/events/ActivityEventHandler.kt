@@ -5,6 +5,9 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.core.net.toUri
+import androidx.fragment.app.add
+import androidx.fragment.app.commit
+import androidx.fragment.app.commitNow
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -65,7 +68,19 @@ class ActivityEventHandler(
                     putParcelable(Constants.EXTRA_MEDIA_PLAY_OPTIONS, event.playOptions)
                     putParcelable(Constants.EXTRA_WEB_PREFERENCES, event.preferences)
                 }
-                supportFragmentManager.addFragment<PlayerFragment>(args)
+                // Only one native player may exist. Tear down a previous one (e.g. a mini player
+                // still floating over the web app) first, so its playback, media session and
+                // notification are released before the new player sets up its own.
+                val previousPlayers = supportFragmentManager.fragments.filterIsInstance<PlayerFragment>()
+                if (previousPlayers.isNotEmpty()) {
+                    supportFragmentManager.commitNow {
+                        previousPlayers.forEach(::remove)
+                    }
+                }
+                // Not added to the back stack, the player closes itself (see PlayerFragment.closePlayer)
+                supportFragmentManager.commit {
+                    add<PlayerFragment>(R.id.fragment_container, args = args)
+                }
             }
             is ActivityEvent.OpenUrl -> {
                 try {

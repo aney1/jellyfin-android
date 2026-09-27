@@ -58,7 +58,6 @@ import org.jellyfin.mobile.utils.extensions.getParcelableCompat
 import org.jellyfin.mobile.utils.extensions.isLandscape
 import org.jellyfin.mobile.utils.extensions.keepScreenOn
 import org.jellyfin.mobile.utils.toast
-import org.jellyfin.mobile.webapp.WebViewFragment
 import org.jellyfin.sdk.model.api.MediaSegmentDto
 import org.jellyfin.sdk.model.api.MediaStream
 import org.koin.android.ext.android.inject
@@ -127,7 +126,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             playerView.player = player
             // Automatically close fragment, unless we're in PiP mode
             if (player == null && !(AndroidVersion.isAtLeastN && requireActivity().isInPictureInPictureMode)) {
-                parentFragmentManager.popBackStack()
+                closePlayer()
             }
         }
         viewModel.playerState.observe(this) { playerState ->
@@ -265,7 +264,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         }
 
         // Handle toolbar back button
-        toolbar.setNavigationOnClickListener { parentFragmentManager.popBackStack() }
+        toolbar.setNavigationOnClickListener { closePlayer() }
 
         // Create playback menus
         playerMenus = PlayerMenus(this, playerBinding, playerControlsBinding)
@@ -337,7 +336,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             updateMiniPlayPauseIcon()
         }
         playerBinding.miniCloseButton.setOnClickListener {
-            parentFragmentManager.popBackStack()
+            closePlayer()
         }
     }
 
@@ -356,7 +355,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
         // If playback ended during picture in picture we'll return to the main app when PiP is closed
         if (viewModel.playerOrNull == null) {
-            parentFragmentManager.popBackStack()
+            closePlayer()
         }
 
         // Re-enable auto-enter Picture-in-Picture now that the player is in the foreground again
@@ -528,12 +527,36 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
     override fun onInterceptBackPressed(): Boolean {
         if (isMiniPlayer) {
-            // While minimized the user is browsing the web app, so route back there. If the web
-            // app can't go back, return false to let the mini player be dismissed (back stack pop).
-            val webFragment = parentFragmentManager.fragments.filterIsInstance<WebViewFragment>().firstOrNull()
-            return webFragment?.onInterceptBackPressed() ?: false
+            // While minimized the user is browsing the screen underneath (usually the web app),
+            // so route back there first.
+            val fragmentManager = parentFragmentManager
+            val underlyingFragment = fragmentManager.fragments.lastOrNull { fragment ->
+                fragment !is PlayerFragment && fragment.id == R.id.fragment_container
+            }
+            if (underlyingFragment is BackPressInterceptor && underlyingFragment.onInterceptBackPressed()) {
+                return true
+            }
+            if (!fragmentManager.isStateSaved && fragmentManager.popBackStackImmediate()) {
+                return true
+            }
         }
-        return false
+        // Nothing (else) to go back to, so close the player
+        closePlayer()
+        return true
+    }
+
+    /**
+     * Close the player, stopping playback.
+     *
+     * The player isn't added to the back stack (see ActivityEventHandler), so it has to remove
+     * itself. Popping the back stack instead would close whatever screen was opened on top of
+     * the mini player (e.g. the Media Archive screen) and leave the player running.
+     */
+    fun closePlayer() {
+        val fragmentManager = parentFragmentManager
+        // With the state saved, onResume closes the player once it's back in the foreground
+        if (!isAdded || isRemoving || fragmentManager.isStateSaved) return
+        fragmentManager.beginTransaction().remove(this).commit()
     }
 
     /**
