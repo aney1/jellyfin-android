@@ -348,10 +348,8 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     override fun onResume() {
         super.onResume()
 
-        // When returning from another app, fullscreen mode for landscape orientation has to be set again
-        if (isLandscape() && !isMiniPlayer) {
-            playerFullscreenHelper.enableFullscreen()
-        }
+        // When returning from another app, fullscreen mode has to be set again
+        updateFullscreenState(resources.configuration)
 
         // If playback ended during picture in picture we'll return to the main app when PiP is closed
         if (viewModel.playerOrNull == null) {
@@ -384,6 +382,11 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             currentVideoStream?.isLandscape != false -> {
                 // Disable fullscreen for landscape video in portrait orientation
                 playerFullscreenHelper.disableFullscreen()
+            }
+            else -> {
+                // Portrait videos fill the screen in portrait orientation, so they're always fullscreen.
+                // Without this, the system bars stayed visible e.g. after expanding the mini player.
+                playerFullscreenHelper.enableFullscreen()
             }
         }
     }
@@ -739,6 +742,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         if (isInPictureInPictureMode) {
             playerMenus?.dismissPlaybackInfo()
             playerLockScreenHelper.hideUnlockButton()
+        } else {
+            // Back to the full player: restore the system bar state for the current video
+            updateFullscreenState(resources.configuration)
         }
     }
 
