@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewAssetLoader.AssetsPathHandler
 import androidx.webkit.WebViewCompat
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.MainViewModel
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AppPreferences
@@ -68,6 +69,11 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
     // [WebView.scrollY] alone can't tell us when a pull-down should trigger a refresh.
     @Volatile
     private var webAppScrolledToTop = true
+
+    // Whether the web client handles back itself (rather than exiting), reported from JS.
+    // Needed upfront for the predictive back gesture, see [canInterceptBackPress].
+    @Volatile
+    private var webAppHandlesBack = true
 
     private val timeoutRunnable = Runnable {
         handleError()
@@ -114,6 +120,9 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
                     webViewBinding.swipeRefreshLayout.isRefreshing = false
                     // Track the web client's real scroll position for pull-to-refresh
                     webView.evaluateJavascript(SCROLL_TRACKING_SCRIPT, null)
+                    // Track whether back navigates within the web client or exits it
+                    webView.evaluateJavascript(BACK_STATE_TRACKING_SCRIPT, null)
+                    (activity as? MainActivity)?.updateBackPressedCallback()
                 }
                 requestNoBatteryOptimizations(webViewBinding.root)
             }
@@ -181,6 +190,10 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         return connected && webappFunctionChannel.goBack()
     }
 
+    // On the web client's start pages back exits the app, so leave it to the system there
+    override val canInterceptBackPress: Boolean
+        get() = connected && webAppHandlesBack
+
     override fun onDestroyView() {
         super.onDestroyView()
         webViewBinding = null
@@ -199,6 +212,7 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         addJavascriptInterface(externalPlayer, "ExternalPlayer")
         addJavascriptInterface(mediaSegments, "MediaSegments")
         addJavascriptInterface(WebAppScrollReporter(), "NativeScrollReporter")
+        addJavascriptInterface(WebAppBackStateReporter(), "NativeBackStateReporter")
 
         loadUrl("${server.hostname.trimEnd('/')}/")
         postDelayed(timeoutRunnable, Constants.INITIAL_CONNECTION_TIMEOUT)
@@ -286,6 +300,20 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         }
     }
 
+    /**
+     * Receives updates from the web client on whether it handles back itself. Methods are
+     * invoked on a background (JS bridge) thread.
+     */
+    private inner class WebAppBackStateReporter {
+        @JavascriptInterface
+        fun setHandlesBack(handlesBack: Boolean) {
+            webAppHandlesBack = handlesBack
+            runOnUiThread {
+                (activity as? MainActivity)?.updateBackPressedCallback()
+            }
+        }
+    }
+
     companion object {
         /**
          * Tracks the scroll position of whichever element the web client scrolls (it scrolls
@@ -321,6 +349,57 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
                 window.addEventListener('hashchange', reset);
                 window.addEventListener('popstate', reset);
                 reset();
+            })();
+            """.trimIndent()
+
+        /**
+         * Reports whether the web client handles back itself (see NavigationPlugin.goBack): it navigates
+         * back unless it's on a start page without an open dialog, and otherwise exits through
+         * NativeInterface.exitApp, which keeps the app in the background while media is playing.
+         * Re-evaluated after every history change, whenever the body's children change (dialogs are
+         * attached directly to the body) and once a second to catch playback starting or stopping.
+         */
+        private val BACK_STATE_TRACKING_SCRIPT =
+            """
+            (function () {
+                if (window.__jellyfinBackState) return;
+                window.__jellyfinBackState = true;
+                var lastHandlesBack = null;
+                function handlesBack() {
+                    var helper = window.NavigationHelper;
+                    var playbackManager = helper && helper.playbackManager;
+                    if (playbackManager && playbackManager.isPlaying() && !playbackManager.paused()) return true;
+                    var appRouter = window.Emby && window.Emby.Page;
+                    if (!appRouter || typeof appRouter.canGoBack !== 'function') return true;
+                    return !!appRouter.canGoBack();
+                }
+                function report() {
+                    var value = true;
+                    try {
+                        value = handlesBack();
+                    } catch (e) {}
+                    if (value === lastHandlesBack) return;
+                    lastHandlesBack = value;
+                    try {
+                        NativeBackStateReporter.setHandlesBack(value);
+                    } catch (e) {}
+                }
+                function scheduleReport() {
+                    setTimeout(report, 0);
+                }
+                ['pushState', 'replaceState'].forEach(function (name) {
+                    var original = history[name];
+                    history[name] = function () {
+                        var result = original.apply(this, arguments);
+                        scheduleReport();
+                        return result;
+                    };
+                });
+                window.addEventListener('popstate', scheduleReport);
+                window.addEventListener('hashchange', scheduleReport);
+                new MutationObserver(scheduleReport).observe(document.body, { childList: true });
+                setInterval(report, 1000);
+                report();
             })();
             """.trimIndent()
     }

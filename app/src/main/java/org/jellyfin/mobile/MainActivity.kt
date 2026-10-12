@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withStarted
 import kotlinx.coroutines.flow.collectLatest
@@ -70,6 +71,8 @@ class MainActivity : AppCompatActivity() {
      * (see result of [BackPressInterceptor.onInterceptBackPressed]), the topmost backstack entry will be popped.
      *
      * If there is no topmost backstack entry, the event will be passed onto the dispatcher's fallback handler.
+     *
+     * The callback is only enabled while there is something to go back to (see [updateBackPressedCallback]).
      */
     private val onBackPressedCallback: OnBackPressedCallback.() -> Unit = callback@{
         val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
@@ -91,8 +94,10 @@ class MainActivity : AppCompatActivity() {
             "MainActivity should be the lowest onBackPressCallback"
         }
         onBackPressedDispatcher.onBackPressed()
-        isEnabled = true // re-enable callback in case activity isn't finished
+        updateBackPressedCallback() // re-enable callback in case activity isn't finished
     }
+
+    private var backPressedCallback: OnBackPressedCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -140,7 +145,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Handle back presses
-        onBackPressedDispatcher.addCallback(this, onBackPressed = onBackPressedCallback)
+        backPressedCallback = onBackPressedDispatcher.addCallback(this, onBackPressed = onBackPressedCallback)
+        supportFragmentManager.addOnBackStackChangedListener(::updateBackPressedCallback)
+        supportFragmentManager.registerFragmentLifecycleCallbacks(
+            object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentResumed(fm: FragmentManager, f: Fragment) = updateBackPressedCallback()
+                override fun onFragmentDetached(fm: FragmentManager, f: Fragment) = updateBackPressedCallback()
+            },
+            false,
+        )
+        updateBackPressedCallback()
 
         // Setup Chromecast
         chromecast.initializePlugin(this)
@@ -149,6 +163,22 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         orientationListener.enable()
+    }
+
+    /**
+     * Enables the back callback only while the app will actually handle back, i.e. the visible fragment
+     * intercepts it or there's a back stack entry to pop. Otherwise the system handles back itself, which is
+     * what lets it preview the back-to-home animation of the predictive back gesture (Android 13+).
+     *
+     * Before Android 13 the callback stays enabled, so that leaving the web app's start page still goes
+     * through its exit handling (which keeps the app alive while media is playing).
+     */
+    fun updateBackPressedCallback() {
+        val callback = backPressedCallback ?: return
+        val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        callback.isEnabled = !AndroidVersion.isAtLeastT ||
+            supportFragmentManager.backStackEntryCount > 0 ||
+            currentFragment is BackPressInterceptor && currentFragment.canInterceptBackPress
     }
 
     private fun handleServerState(state: ServerState) {

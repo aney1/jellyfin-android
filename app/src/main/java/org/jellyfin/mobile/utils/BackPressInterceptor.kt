@@ -38,4 +38,14 @@ interface BackPressInterceptor {
      * @see MainActivity.onBackPressedCallback
      */
     fun onInterceptBackPressed(): Boolean = false
+
+    /**
+     * Whether [onInterceptBackPressed] would currently handle a back press.
+     *
+     * With predictive back, the system decides whether to preview its back-to-home animation as soon
+     * as the gesture starts, so the app has to declare upfront whether it will handle back.
+     * Call [MainActivity.updateBackPressedCallback] whenever this changes.
+     */
+    val canInterceptBackPress: Boolean
+        get() = true
 }
