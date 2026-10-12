@@ -58,7 +58,7 @@ which can still be found [in the archives](https://github.com/jellyfin-archive/j
 
 ## Fork changes
 
-This fork tracks upstream releases (currently **v2.7.2**) and adds the following on top. Most of the
+This fork tracks upstream releases (currently **v2.7.3**) and adds the following on top. Most of the
 additions have a toggle in the app settings, so they can be turned off without rebuilding; the
 behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) are always on.
 
@@ -80,7 +80,6 @@ behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) ar
   hidden (a dot rather than a full bar, to avoid screen burn-in).
 - **Media segments** — a replay button for skipped segments, a translucent skip button, and a bubble
   showing the summed skip amount above the controls.
-- **Playback stays alive when the screen is locked** (audio keeps going).
 - **Queue fixes** — resume playlist/queue items from the server-saved position, and mark a video as
   played when you actively skip past it.
 - **Back gesture fix** — removes upstream's left-edge gesture exclusion rect so the system back
