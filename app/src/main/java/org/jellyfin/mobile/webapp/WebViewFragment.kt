@@ -34,6 +34,7 @@ import org.jellyfin.mobile.bridge.NativeInterface
 import org.jellyfin.mobile.bridge.NativePlayer
 import org.jellyfin.mobile.data.entity.ServerEntity
 import org.jellyfin.mobile.databinding.FragmentWebviewBinding
+import org.jellyfin.mobile.offline.playlist.OfflineBridge
 import org.jellyfin.mobile.setup.ConnectFragment
 import org.jellyfin.mobile.utils.AndroidVersion
 import org.jellyfin.mobile.utils.BackPressInterceptor
@@ -213,6 +214,7 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
         addJavascriptInterface(mediaSegments, "MediaSegments")
         addJavascriptInterface(WebAppScrollReporter(), "NativeScrollReporter")
         addJavascriptInterface(WebAppBackStateReporter(), "NativeBackStateReporter")
+        addJavascriptInterface(OfflineBridge(this@WebViewFragment), "NativeOffline") // Fork: offline
 
         loadUrl("${server.hostname.trimEnd('/')}/")
         postDelayed(timeoutRunnable, Constants.INITIAL_CONNECTION_TIMEOUT)

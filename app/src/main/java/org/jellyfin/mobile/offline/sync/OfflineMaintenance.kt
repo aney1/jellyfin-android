@@ -7,28 +7,33 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.ApiClientController
 import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.data.OfflineDao
+import org.jellyfin.mobile.offline.playlist.PlaylistSync
 import org.jellyfin.sdk.api.client.ApiClient
 import timber.log.Timber
 
 /**
  * Fork: offline. One maintenance pass, run by [OfflineSyncWorker]:
- * send pending watch states, fetch download extras and refresh watch states (videos watched elsewhere).
+ * send pending watch states, fetch download extras, refresh watch states (videos watched elsewhere),
+ * and sync playlists.
  */
 class OfflineMaintenance(
     private val apiClient: ApiClient,
     private val apiClientController: ApiClientController,
     private val downloadDao: DownloadDao,
     private val offlineDao: OfflineDao,
+    private val preferences: OfflinePreferences,
     private val playStateSync: PlayStateSync,
     private val downloadExtras: DownloadExtras,
+    private val playlistSync: PlaylistSync,
+    private val offlineDownloads: OfflineDownloads,
 ) {
     private val mutex = Mutex()
 
     /**
      * @return true if everything that needs the server was done.
      */
-    @Suppress("UnusedParameter")
     suspend fun run(includePlaylists: Boolean): Boolean = mutex.withLock {
         // A worker may run without the app being open, the global api client is configured by the activity
         if (apiClient.accessToken == null) {
@@ -47,6 +52,10 @@ class OfflineMaintenance(
                 Timber.i("Could not refresh watch states: %s", e.message)
                 complete = false
             }
+        }
+
+        if (includePlaylists && preferences.backgroundSync) {
+            playlistSync.syncAllInBackground(offlineDownloads.backgroundEnqueuer)
         }
 
         removeOrphans()

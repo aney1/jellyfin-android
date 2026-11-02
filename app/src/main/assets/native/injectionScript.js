@@ -22,6 +22,14 @@
     if (navTabs.length) {
         scripts.push('/native/NavTabInjector.js', ...navTabs);
     }
+    // Fork: offline - download controls on playlist pages
+    try {
+        if (window.NativeOffline && NativeOffline.isEnabled()) {
+            scripts.push('/native/PlaylistDownloadInjector.js');
+        }
+    } catch (e) {
+        // Bridge unavailable - skip the download controls
+    }
     scripts.push(document.currentScript.src.concat('?deferred=true&ts=', Date.now()));
     for (const script of scripts) {
         const scriptElement = document.createElement('script');

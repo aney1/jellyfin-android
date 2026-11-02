@@ -4,8 +4,10 @@ import androidx.room.Room
 import org.jellyfin.mobile.offline.data.OfflineDatabase
 import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.offline.playback.OfflineQueueSupport
+import org.jellyfin.mobile.offline.playlist.PlaylistSync
 import org.jellyfin.mobile.offline.sync.DownloadExtras
 import org.jellyfin.mobile.offline.sync.OfflineCoordinator
+import org.jellyfin.mobile.offline.sync.OfflineDownloads
 import org.jellyfin.mobile.offline.sync.OfflineMaintenance
 import org.jellyfin.mobile.offline.sync.OfflineSyncScheduler
 import org.jellyfin.mobile.offline.sync.PlayStateSync
@@ -32,6 +34,8 @@ val offlineModule = module {
     single { OfflineQueueSupport(get(), get(), get(), get()) }
     single { PlayStateSync(get(), get()) }
     single { DownloadExtras(androidContext(), get(), get()) }
-    single { OfflineMaintenance(get(), get(), get(), get(), get(), get()) }
+    single { OfflineDownloads(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { PlaylistSync(get(), get(), get(), get(), get(), get()) }
+    single { OfflineMaintenance(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { OfflineCoordinator(get(), get(), get()) }
 }
