@@ -1,17 +1,26 @@
 package org.jellyfin.mobile.offline.sync
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.ApiClientController
+import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.sdk.api.client.ApiClient
+import timber.log.Timber
 
 /**
- * Fork: offline. One maintenance pass, run by [OfflineSyncWorker]. The individual tasks are added by the
- * following offline features.
+ * Fork: offline. One maintenance pass, run by [OfflineSyncWorker]:
+ * send pending watch states and refresh watch states (videos watched elsewhere).
  */
 class OfflineMaintenance(
     private val apiClient: ApiClient,
     private val apiClientController: ApiClientController,
+    private val downloadDao: DownloadDao,
+    private val offlineDao: OfflineDao,
+    private val playStateSync: PlayStateSync,
 ) {
     private val mutex = Mutex()
 
@@ -24,6 +33,32 @@ class OfflineMaintenance(
         if (apiClient.accessToken == null) {
             runCatching { apiClientController.loadSavedServerUser() }
         }
-        true
+
+        var complete = playStateSync.flush()
+
+        val downloads = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
+
+        for ((owner, ownerDownloads) in downloads.groupBy { it.serverId to it.userId }) {
+            try {
+                playStateSync.refresh(owner.first, owner.second, ownerDownloads.map { it.itemId })
+            } catch (e: Exception) {
+                Timber.i("Could not refresh watch states: %s", e.message)
+                complete = false
+            }
+        }
+
+        removeOrphans()
+        complete
+    }
+
+    /**
+     * Remove fork data of downloads that were deleted elsewhere (e.g. in upstream's downloads screen).
+     */
+    private suspend fun removeOrphans() {
+        val downloaded = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
+            .map { it.serverId to it.itemId }
+            .toSet()
+        val keep = downloaded.map { it.second } + offlineDao.getAllPlaylistEntries().map { it.itemId }
+        offlineDao.deleteCleanPlayStatesExcept(keep.toSet())
     }
 }

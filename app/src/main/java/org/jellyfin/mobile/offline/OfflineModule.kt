@@ -2,10 +2,12 @@ package org.jellyfin.mobile.offline
 
 import androidx.room.Room
 import org.jellyfin.mobile.offline.data.OfflineDatabase
+import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.offline.playback.OfflineQueueSupport
 import org.jellyfin.mobile.offline.sync.OfflineCoordinator
 import org.jellyfin.mobile.offline.sync.OfflineMaintenance
 import org.jellyfin.mobile.offline.sync.OfflineSyncScheduler
+import org.jellyfin.mobile.offline.sync.PlayStateSync
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
@@ -25,7 +27,9 @@ val offlineModule = module {
     single { OfflineApiClients(get(), get()) }
     single { LocalCopyResolver(androidContext(), get()) }
     single { OfflineSyncScheduler(androidContext()) }
+    single { OfflinePlayback(get(), get(), get(), get()) }
     single { OfflineQueueSupport(get(), get(), get(), get()) }
-    single { OfflineMaintenance(get(), get()) }
+    single { PlayStateSync(get(), get()) }
+    single { OfflineMaintenance(get(), get(), get(), get(), get()) }
     single { OfflineCoordinator(get(), get(), get()) }
 }

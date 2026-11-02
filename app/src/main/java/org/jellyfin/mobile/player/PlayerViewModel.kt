@@ -45,7 +45,9 @@ import org.jellyfin.mobile.player.interaction.PlayerNotificationHelper
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.queue.QueueManager
+import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.jellyfin.mobile.player.ui.DecoderType
 import org.jellyfin.mobile.player.ui.DisplayPreferences
@@ -103,6 +105,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     private val userApi: UserApi = apiClient.userApi
 
     private val appPreferences: AppPreferences by inject()
+    private val offlinePlayback: OfflinePlayback by inject() // Fork: offline
     private val lifecycleObserver = PlayerLifecycleObserver(this)
     private val audioManager: AudioManager by lazy { getApplication<Application>().getSystemService()!! }
     val notificationHelper: PlayerNotificationHelper by lazy { PlayerNotificationHelper(this) }
@@ -339,11 +342,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             viewModelScope.launch {
                 player.reportPlaybackStart(jellyfinMediaSource)
             }
+        } else if (jellyfinMediaSource is LocalJellyfinMediaSource) {
+            // Fork: offline - downloaded copies report too, recorded locally while offline
+            offlinePlayback.onStart(jellyfinMediaSource, jellyfinMediaSource.startTime.inWholeTicks, !playWhenReady)
         }
     }
 
     private fun startProgressUpdates() {
-        if (mediaSourceOrNull != null && mediaSourceOrNull !is RemoteJellyfinMediaSource) return
+        // Fork: offline - downloaded copies (LocalJellyfinMediaSource) report progress too
         progressUpdateJob = viewModelScope.launch {
             while (true) {
                 delay(Constants.PLAYER_TIME_UPDATE_RATE)
@@ -465,6 +471,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     private suspend fun Player.reportPlaybackState() {
+        // Fork: offline
+        (mediaSourceOrNull as? LocalJellyfinMediaSource)?.let { localSource ->
+            if (playbackState != Player.STATE_ENDED) {
+                offlinePlayback.onProgress(localSource, currentPosition.milliseconds.inWholeTicks, !isPlaying)
+            }
+            return
+        }
         val mediaSource = mediaSourceOrNull as? RemoteJellyfinMediaSource ?: return
         val playbackPosition = currentPosition.milliseconds
         if (playbackState != Player.STATE_ENDED) {
@@ -499,6 +512,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     private fun reportPlaybackStop() {
+        // Fork: offline
+        (mediaSourceOrNull as? LocalJellyfinMediaSource)?.let { localSource ->
+            val player = playerOrNull ?: return
+            val hasFinished = player.playbackState == Player.STATE_ENDED
+            offlinePlayback.onStop(localSource, player.currentPosition.milliseconds.inWholeTicks, hasFinished)
+            return
+        }
         val mediaSource = mediaSourceOrNull as? RemoteJellyfinMediaSource ?: return
         val player = playerOrNull ?: return
         val hasFinished = player.playbackState == Player.STATE_ENDED
@@ -715,10 +735,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         viewModelScope.launch {
             // Capture the current item before advancing so it can be marked as played.
             val skippedItemId = mediaSourceOrNull?.itemId
+            // Fork: offline - a skipped downloaded copy is recorded locally, so it also works offline
+            val skippedLocally = mediaSourceOrNull is LocalJellyfinMediaSource
             // Actively skipping a video with the skip button marks it as played. This only
             // runs for an explicit user skip; automatic advancement at the end of a video
             // goes through onPlayerStateChanged (STATE_ENDED) instead.
             if (queueManager.next() && skippedItemId != null) {
+                if (skippedLocally) {
+                    offlinePlayback.markPlayed(skippedItemId)
+                    return@launch
+                }
                 try {
                     playStateApi.markPlayedItem(itemId = skippedItemId)
                 } catch (e: ApiClientException) {
