@@ -7,9 +7,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.ApiClientController
+import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.downloads.DownloadStatus
+import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.playback.OfflinePlayback
@@ -27,6 +29,7 @@ import timber.log.Timber
  * send pending watch states, fetch download extras, refresh watch states (videos watched elsewhere),
  * sync playlists, and delete watched downloads whose delete period has passed.
  */
+@Suppress("LongParameterList")
 class OfflineMaintenance(
     private val apiClient: ApiClient,
     private val apiClientController: ApiClientController,
@@ -38,6 +41,8 @@ class OfflineMaintenance(
     private val playlistSync: PlaylistSync,
     private val offlineDownloads: OfflineDownloads,
     private val offlinePlayback: OfflinePlayback,
+    private val apiClients: OfflineApiClients,
+    private val appPreferences: AppPreferences,
 ) {
     private val mutex = Mutex()
 
@@ -87,9 +92,12 @@ class OfflineMaintenance(
      */
     private suspend fun cachePlayerSettings() = withContext(Dispatchers.IO) {
         try {
-            val user = apiClient.userApi.getCurrentUser().content
+            val serverId = appPreferences.currentServerId ?: return@withContext
+            val userId = appPreferences.currentUserId ?: return@withContext
+            val api = apiClients.get(serverId, userId)?.api ?: return@withContext
+            val user = api.userApi.getCurrentUser().content
             user.configuration?.let { preferences.cachedAutoPlay = it.enableNextEpisodeAutoPlay }
-            val displayPreferences = apiClient.displayPreferencesApi.getDisplayPreferences(
+            val displayPreferences = api.displayPreferencesApi.getDisplayPreferences(
                 displayPreferencesId = Constants.DISPLAY_PREFERENCES_ID_USER_SETTINGS,
                 client = Constants.DISPLAY_PREFERENCES_CLIENT_EMBY,
             ).content
