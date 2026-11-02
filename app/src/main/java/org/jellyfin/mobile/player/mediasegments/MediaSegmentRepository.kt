@@ -3,6 +3,7 @@ package org.jellyfin.mobile.player.mediasegments
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.AppPreferences
+import org.jellyfin.mobile.offline.sync.DownloadExtras
 import org.jellyfin.mobile.utils.extensions.duration
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.mediaSegmentsApi
@@ -43,6 +44,7 @@ class MediaSegmentRepository : KoinComponent {
     private val appPreferences: AppPreferences by inject()
     private val apiClient: ApiClient = get()
     private val mediaSegmentsApi: MediaSegmentsApi = apiClient.mediaSegmentsApi
+    private val downloadExtras: DownloadExtras by inject() // Fork: offline
 
     private val mediaTypeActions = mutableMapOf<MediaSegmentType, MediaSegmentAction>()
 
@@ -99,5 +101,8 @@ class MediaSegmentRepository : KoinComponent {
                 includeSegmentTypes = SUPPORTED_TYPES,
             ).content.items
         }
-    }.getOrDefault(emptyList())
+    }.getOrElse {
+        // Fork: offline - segments stored with the download when the server can't be reached
+        downloadExtras.cachedSegments(item.id)
+    }
 }
