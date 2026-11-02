@@ -35,6 +35,7 @@ import org.jellyfin.mobile.bridge.NativePlayer
 import org.jellyfin.mobile.data.entity.ServerEntity
 import org.jellyfin.mobile.databinding.FragmentWebviewBinding
 import org.jellyfin.mobile.offline.playlist.OfflineBridge
+import org.jellyfin.mobile.offline.ui.OfflineEntry
 import org.jellyfin.mobile.setup.ConnectFragment
 import org.jellyfin.mobile.utils.AndroidVersion
 import org.jellyfin.mobile.utils.BackPressInterceptor
@@ -282,7 +283,8 @@ class WebViewFragment : Fragment(), BackPressInterceptor, JellyfinWebChromeClien
 
     private fun handleError() {
         connected = false
-        onSelectServer(error = true)
+        // Fork: offline - show the downloads instead of the connect screen when there are any
+        OfflineEntry.onServerUnreachable(this) { onSelectServer(error = true) }
     }
 
     override fun onShowFileChooser(intent: Intent, filePathCallback: ValueCallback<Array<Uri>>) {

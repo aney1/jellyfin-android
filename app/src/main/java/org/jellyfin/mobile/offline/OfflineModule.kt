@@ -11,8 +11,10 @@ import org.jellyfin.mobile.offline.sync.OfflineDownloads
 import org.jellyfin.mobile.offline.sync.OfflineMaintenance
 import org.jellyfin.mobile.offline.sync.OfflineSyncScheduler
 import org.jellyfin.mobile.offline.sync.PlayStateSync
+import org.jellyfin.mobile.offline.ui.OfflineViewModel
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 /**
@@ -38,4 +40,6 @@ val offlineModule = module {
     single { PlaylistSync(get(), get(), get(), get(), get(), get()) }
     single { OfflineMaintenance(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { OfflineCoordinator(get(), get(), get()) }
+
+    viewModel { OfflineViewModel(get(), get(), get(), get(), get()) }
 }
