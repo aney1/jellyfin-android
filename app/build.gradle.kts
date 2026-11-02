@@ -271,3 +271,8 @@ tasks {
         }
     }
 }
+
+// Fork: offline - the unit tests (JUnit 5 / Kotest, as declared above) need the JUnit platform to run
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
