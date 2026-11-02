@@ -1,8 +1,10 @@
 package org.jellyfin.mobile.offline.playlist
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.downloads.DownloadStatus
 import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.data.DownloadOriginEntity
@@ -51,11 +53,11 @@ class PlaylistSync(
     /**
      * Start tracking a playlist; only done for an explicit action of the user (mode, limits, single download).
      */
-    suspend fun getOrCreatePlaylist(serverId: Long, userId: Long, playlistId: UUID, name: String?): PlaylistEntity? {
-        offlineDao.getPlaylist(serverId, playlistId)?.let { return it }
+    suspend fun getOrCreatePlaylist(serverId: Long, userId: Long, playlistId: UUID, name: String?): PlaylistEntity? = withContext(Dispatchers.IO) {
+        offlineDao.getPlaylist(serverId, playlistId)?.let { return@withContext it }
         val playlistName = name?.takeIf { it.isNotBlank() } ?: fetchName(serverId, userId, playlistId)
         offlineDao.upsertPlaylist(PlaylistEntity(serverId = serverId, userId = userId, playlistId = playlistId, name = playlistName.orEmpty()))
-        return offlineDao.getPlaylist(serverId, playlistId)
+        offlineDao.getPlaylist(serverId, playlistId)
     }
 
     suspend fun setMode(playlist: PlaylistEntity, mode: PlaylistDownloadMode) =
@@ -73,18 +75,21 @@ class PlaylistSync(
      *
      * @return the number of downloads that were started.
      */
-    suspend fun sync(playlist: PlaylistEntity, download: Boolean, enqueuer: Enqueuer): Int = mutex.withLock {
-        val entries = refreshSnapshot(playlist) ?: return@withLock 0
+    suspend fun sync(playlist: PlaylistEntity, download: Boolean, enqueuer: Enqueuer): Int = locked {
+        val entries = refreshSnapshot(playlist) ?: return@locked 0
         val started = if (download) downloadWanted(playlist, entries, enqueuer) else 0
         removeLeftPlaylists(setOf(playlist.playlistId))
         started
     }
 
+    /** Server requests must not run on the main thread (the SDK reads responses on the calling thread). */
+    private suspend fun <T> locked(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
+
     /**
      * Background pass: automatic playlists download new videos, and every playlist with downloads is refreshed
      * (for the offline screen and for removing downloads that left it).
      */
-    suspend fun syncAllInBackground(enqueuer: Enqueuer) = mutex.withLock {
+    suspend fun syncAllInBackground(enqueuer: Enqueuer) = locked {
         val downloaded = offlineDownloads.downloadsOf(null, offlineDao.getAllPlaylistMemberships().map { it.itemId })
         val memberships = offlineDao.getAllPlaylistMemberships().groupBy({ it.playlistId }, { it.itemId })
         val origins = offlineDao.getDownloadOrigins().map { it.playlistId }.toSet()
@@ -110,7 +115,7 @@ class PlaylistSync(
     /**
      * Download a single video of a playlist, independent of the playlist's mode.
      */
-    suspend fun downloadItem(playlist: PlaylistEntity, itemId: UUID, enqueuer: Enqueuer) = mutex.withLock {
+    suspend fun downloadItem(playlist: PlaylistEntity, itemId: UUID, enqueuer: Enqueuer) = locked {
         offlineDao.deleteExclusion(playlist.serverId, playlist.playlistId, itemId)
         val entries = offlineDao.getPlaylistEntryIds(playlist.serverId, playlist.playlistId).takeIf { playlist.lastSyncedAt != null }
             ?: refreshSnapshot(playlist)?.map { it.itemId }
@@ -125,14 +130,14 @@ class PlaylistSync(
      * Mark a video as "don't download" or allow it again. Excluding removes the download only if it was made for
      * this playlist alone; manual downloads and those other playlists want are kept.
      */
-    suspend fun setExcluded(playlist: PlaylistEntity, itemId: UUID, excluded: Boolean) = mutex.withLock {
+    suspend fun setExcluded(playlist: PlaylistEntity, itemId: UUID, excluded: Boolean) = locked {
         if (!excluded) {
             offlineDao.deleteExclusion(playlist.serverId, playlist.playlistId, itemId)
-            return@withLock
+            return@locked
         }
         offlineDao.insertExclusion(PlaylistExclusionEntity(playlist.serverId, playlist.playlistId, itemId))
         val origins = offlineDao.getDownloadOriginsOfItem(playlist.serverId, itemId)
-        if (origins.none { it.playlistId == playlist.playlistId }) return@withLock
+        if (origins.none { it.playlistId == playlist.playlistId }) return@locked
         offlineDao.deleteDownloadOrigin(playlist.serverId, itemId, playlist.playlistId)
         if (origins.all { it.playlistId == playlist.playlistId }) offlineDownloads.delete(playlist.serverId, itemId)
     }
@@ -141,7 +146,7 @@ class PlaylistSync(
      * Delete the download of a video. In playlists that download by themselves it is also excluded, otherwise the
      * next sync would download it again.
      */
-    suspend fun deleteDownload(playlist: PlaylistEntity, itemId: UUID) = mutex.withLock {
+    suspend fun deleteDownload(playlist: PlaylistEntity, itemId: UUID) = locked {
         if (playlist.mode != PlaylistDownloadMode.OFF) {
             offlineDao.insertExclusion(PlaylistExclusionEntity(playlist.serverId, playlist.playlistId, itemId))
         }

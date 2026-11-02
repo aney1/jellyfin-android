@@ -45,7 +45,7 @@ class DownloadExtras(
      *
      * @return true if everything was fetched.
      */
-    suspend fun fetchMissing(downloads: List<DownloadEntity>): Boolean {
+    suspend fun fetchMissing(downloads: List<DownloadEntity>): Boolean = withContext(Dispatchers.IO) {
         var complete = true
         val now = System.currentTimeMillis()
         for (download in downloads) {
@@ -63,7 +63,7 @@ class DownloadExtras(
                 complete = false
             }
         }
-        return complete
+        complete
     }
 
     /**

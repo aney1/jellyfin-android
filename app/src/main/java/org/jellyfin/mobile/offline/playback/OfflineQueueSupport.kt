@@ -1,6 +1,8 @@
 package org.jellyfin.mobile.offline.playback
 
 import androidx.media3.common.MediaItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.data.entity.DownloadEntity
@@ -94,10 +96,12 @@ class OfflineQueueSupport(
 
     private suspend fun fetchUserData(download: DownloadEntity): Long? {
         val target = apiClients.get(download.serverId, download.userId) ?: return null
-        return withTimeoutOrNull(SERVER_TIMEOUT_MS) {
-            runCatching {
-                target.api.itemsApi.getItemUserData(download.itemId, target.userId).content.playbackPositionTicks
-            }.getOrNull()
+        return withContext(Dispatchers.IO) {
+            withTimeoutOrNull(SERVER_TIMEOUT_MS) {
+                runCatching {
+                    target.api.itemsApi.getItemUserData(download.itemId, target.userId).content.playbackPositionTicks
+                }.getOrNull()
+            }
         }
     }
 

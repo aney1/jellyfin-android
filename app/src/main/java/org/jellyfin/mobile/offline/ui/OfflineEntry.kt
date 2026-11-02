@@ -3,7 +3,9 @@ package org.jellyfin.mobile.offline.ui
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.offline.LocalCopyResolver
@@ -59,11 +61,11 @@ object OfflineEntry : KoinComponent {
     /**
      * Whether the server the app is signed in to answers.
      */
-    suspend fun isServerReachable(): Boolean {
-        val serverId = appPreferences.currentServerId ?: return false
-        val userId = appPreferences.currentUserId ?: return false
-        val target = apiClients.get(serverId, userId) ?: return false
-        return withTimeoutOrNull(PING_TIMEOUT_MS) {
+    suspend fun isServerReachable(): Boolean = withContext(Dispatchers.IO) {
+        val serverId = appPreferences.currentServerId ?: return@withContext false
+        val userId = appPreferences.currentUserId ?: return@withContext false
+        val target = apiClients.get(serverId, userId) ?: return@withContext false
+        withTimeoutOrNull(PING_TIMEOUT_MS) {
             runCatching { target.api.systemApi.getPublicSystemInfo() }.isSuccess
         } ?: false
     }

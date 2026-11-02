@@ -1,8 +1,10 @@
 package org.jellyfin.mobile.offline.sync
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.data.PlayStateEntity
@@ -52,7 +54,9 @@ class PlayStateSync(
      *
      * @return true if there is nothing left to send.
      */
-    suspend fun push(serverId: Long, userId: Long, itemId: UUID): Boolean = mutex.withLock {
+    suspend fun push(serverId: Long, userId: Long, itemId: UUID): Boolean = withContext(Dispatchers.IO) { pushSerialized(serverId, userId, itemId) }
+
+    private suspend fun pushSerialized(serverId: Long, userId: Long, itemId: UUID): Boolean = mutex.withLock {
         // Read inside the lock: always send the newest local state
         val state = offlineDao.getPlayState(serverId, userId, itemId) ?: return@withLock true
         if (!state.dirty) return@withLock true
@@ -120,8 +124,8 @@ class PlayStateSync(
     /**
      * Update the local watch states of [itemIds] from the server. Rows with unsent local changes are kept.
      */
-    suspend fun refresh(serverId: Long, userId: Long, itemIds: Collection<UUID>) {
-        if (itemIds.isEmpty()) return
+    suspend fun refresh(serverId: Long, userId: Long, itemIds: Collection<UUID>) = withContext(Dispatchers.IO) {
+        if (itemIds.isEmpty()) return@withContext
         val target = apiClients.get(serverId, userId) ?: error("No api client for server user ($serverId, $userId)")
         for (chunk in itemIds.distinct().chunked(BATCH_SIZE)) {
             val items = target.api.itemsApi.getItems(
