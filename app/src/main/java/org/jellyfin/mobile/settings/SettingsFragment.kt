@@ -27,6 +27,7 @@ import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.app.StorageManager
 import org.jellyfin.mobile.databinding.FragmentSettingsBinding
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.mobile.offline.offlineSettings
 import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.applyWindowInsetsAsMargins
@@ -368,6 +369,8 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 false
             }
         }
+
+        offlineSettings() // Fork: offline
     }
 
     companion object {

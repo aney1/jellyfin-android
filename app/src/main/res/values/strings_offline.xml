@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: offline. Kept apart from upstream's strings.xml so translations and upstream merges don't conflict. -->
+<resources>
+    <!-- Offline screen -->
+    <string name="offline_title">Offline</string>
+    <string name="offline_reconnect">Reconnect</string>
+    <string name="offline_server_reachable">The server is reachable again</string>
+    <string name="offline_empty">No downloaded videos</string>
+    <string name="offline_playlists">Playlists</string>
+    <string name="offline_videos">Videos</string>
+    <string name="offline_playlist_count">%1$d of %2$d downloaded</string>
+    <string name="offline_not_downloaded">Not downloaded</string>
+
+    <!-- Playlist download controls -->
+    <string name="offline_mode_title">Download this playlist</string>
+    <string name="offline_mode_off">Off – download single videos by hand</string>
+    <string name="offline_mode_semi">Semi-automatic – download new videos on request</string>
+    <string name="offline_mode_auto">Automatic – download new videos automatically</string>
+    <string name="offline_limits">Limits</string>
+    <string name="offline_limits_message">Leave empty for no limit. Only unwatched videos are downloaded.</string>
+    <string name="offline_limit_items_hint">Maximum number of videos</string>
+    <string name="offline_limit_runtime_hint">Skip videos longer than (minutes)</string>
+    <string name="offline_item_title">Video</string>
+    <string name="offline_action_download">Download</string>
+    <string name="offline_action_delete">Delete download</string>
+    <string name="offline_action_exclude">Don\'t download</string>
+    <string name="offline_action_include">Allow download</string>
+
+    <!-- Settings -->
+    <string name="pref_category_offline">Offline &amp; playlist downloads</string>
+    <string name="pref_offline_prefer_downloads">Play downloaded copies</string>
+    <string name="pref_offline_prefer_downloads_summary">Play a video from its download instead of streaming it when one exists</string>
+    <string name="pref_offline_playlist_controls">Download controls on playlists</string>
+    <string name="pref_offline_playlist_controls_summary">Show download mode, limits and per-video download buttons on playlist pages</string>
+    <string name="pref_offline_background_sync">Download playlists in the background</string>
+    <string name="pref_offline_background_sync_summary">Check automatic playlists for new videos every few hours</string>
+    <string name="pref_offline_open_offline_screen">Offline screen</string>
+    <string name="pref_offline_open_offline_screen_summary">Show the downloads when the server can\'t be reached</string>
+    <string name="pref_offline_delete_watched">Delete watched downloads</string>
+    <string name="pref_offline_delete_never">Never</string>
+    <string name="pref_offline_delete_immediately">Right after watching</string>
+    <string name="pref_offline_delete_1_day">1 day after watching</string>
+    <string name="pref_offline_delete_3_days">3 days after watching</string>
+    <string name="pref_offline_delete_7_days">7 days after watching</string>
+    <string name="pref_offline_delete_14_days">14 days after watching</string>
+    <string name="pref_offline_delete_30_days">30 days after watching</string>
+</resources>

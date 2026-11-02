@@ -5,10 +5,13 @@ import android.webkit.WebView
 import org.jellyfin.mobile.app.apiModule
 import org.jellyfin.mobile.app.applicationModule
 import org.jellyfin.mobile.data.databaseModule
+import org.jellyfin.mobile.offline.offlineModule
+import org.jellyfin.mobile.offline.sync.OfflineCoordinator
 import org.jellyfin.mobile.utils.JellyTree
 import org.jellyfin.mobile.utils.isWebViewSupported
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.fragment.koin.fragmentFactory
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
@@ -35,7 +38,11 @@ class JellyfinApplication : Application() {
                 applicationModule,
                 apiModule,
                 databaseModule,
+                offlineModule, // Fork: offline
             )
         }
+
+        // Fork: offline - background sync of watch states, download extras and playlists
+        GlobalContext.get().get<OfflineCoordinator>().start()
     }
 }
