@@ -2,6 +2,7 @@ package org.jellyfin.mobile.offline.playback
 
 import androidx.media3.common.MediaItem
 import kotlinx.coroutines.withTimeoutOrNull
+import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.offline.LocalCopyResolver
 import org.jellyfin.mobile.offline.OfflineApiClients
@@ -12,9 +13,9 @@ import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.extensions.ticks
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 
 /**
@@ -23,29 +24,42 @@ import kotlin.time.Duration
  */
 class OfflineQueueSupport(
     private val preferences: OfflinePreferences,
+    private val appPreferences: AppPreferences,
     private val localCopyResolver: LocalCopyResolver,
     private val offlineDao: OfflineDao,
     private val apiClients: OfflineApiClients,
 ) {
-    private val subtitleConfigurations = ConcurrentHashMap<UUID, List<MediaItem.SubtitleConfiguration>>()
+    /** Subtitles of the last played downloads, handed from starting an item to building its media source. */
+    private val subtitleConfigurations = object : LinkedHashMap<UUID, List<MediaItem.SubtitleConfiguration>>(
+        SUBTITLE_CACHE_SIZE,
+        LOAD_FACTOR,
+        true,
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<UUID, List<MediaItem.SubtitleConfiguration>>?) =
+            size > SUBTITLE_CACHE_SIZE
+    }
 
     /**
-     * Whether [itemId] should be played from its downloaded copy.
+     * The downloaded copy [itemId] should be played from, or null to stream it.
      *
      * @param mediaSourceId the version requested by the web app, a different version is streamed.
      * @param downloadsOnly playback was started from the offline screen, only downloads can be played.
      */
-    suspend fun shouldPlayLocally(itemId: UUID, mediaSourceId: String?, downloadsOnly: Boolean): Boolean {
-        if (!downloadsOnly && !preferences.preferDownloads) return false
-        val copy = localCopyResolver.find(itemId) ?: return false
-        if (downloadsOnly) return true
+    suspend fun localCopyFor(itemId: UUID, mediaSourceId: String?, downloadsOnly: Boolean): LocalCopyResolver.LocalCopy? {
+        if (downloadsOnly) return localCopyResolver.find(itemId)
+        if (!preferences.preferDownloads) return null
 
-        val source = copy.download.item.mediaSources?.firstOrNull() ?: return false
-        if (mediaSourceId != null && !sameId(mediaSourceId, source.id) && !sameId(mediaSourceId, itemId.toString())) return false
+        // Only a download of the server and user the web app is signed in to
+        val copy = localCopyResolver.find(itemId, appPreferences.currentServerId, appPreferences.currentUserId) ?: return null
+        val source = copy.download.item.mediaSources?.firstOrNull() ?: return null
+        if (mediaSourceId != null && mediaSourceId.toUUIDOrNull().let { it == null || it != source.id?.toUUIDOrNull() }) {
+            return null
+        }
 
         // Until the external subtitles are stored, streaming keeps them available
         val hasExternalSubtitles = source.mediaStreams.orEmpty().any { it.isDownloadableExternalSubtitle }
-        return !hasExternalSubtitles || offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone == true
+        if (hasExternalSubtitles && offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone != true) return null
+        return copy
     }
 
     /**
@@ -84,7 +98,7 @@ class OfflineQueueSupport(
      */
     suspend fun prepareSubtitles(download: DownloadEntity) {
         val files = offlineDao.getSubtitleFiles(download.serverId, download.itemId)
-        subtitleConfigurations[download.itemId] = files
+        val configurations = files
             .filter { file -> file.uri.path?.let(::File)?.exists() == true }
             .map { file ->
                 MediaItem.SubtitleConfiguration.Builder(file.uri)
@@ -94,15 +108,15 @@ class OfflineQueueSupport(
                     .setLanguage(file.language ?: Constants.LANGUAGE_UNDEFINED)
                     .build()
             }
+        synchronized(subtitleConfigurations) { subtitleConfigurations[download.itemId] = configurations }
     }
 
     fun getSubtitleConfigurations(itemId: UUID): List<MediaItem.SubtitleConfiguration> =
-        subtitleConfigurations[itemId].orEmpty()
-
-    private fun sameId(a: String?, b: String?): Boolean =
-        a != null && b != null && a.replace("-", "").equals(b.replace("-", ""), ignoreCase = true)
+        synchronized(subtitleConfigurations) { subtitleConfigurations[itemId] }.orEmpty()
 
     private companion object {
         const val SERVER_TIMEOUT_MS = 2_000L
+        const val SUBTITLE_CACHE_SIZE = 8
+        const val LOAD_FACTOR = 0.75f
     }
 }
