@@ -5,39 +5,31 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.data.dao.DownloadDao
-import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.data.PlayStateEntity
 import org.jellyfin.mobile.offline.sync.OfflineSyncScheduler
+import org.jellyfin.mobile.offline.sync.PlayStateSync
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
-import org.jellyfin.sdk.api.client.extensions.playStateApi
-import org.jellyfin.sdk.model.api.PlayMethod
-import org.jellyfin.sdk.model.api.PlaybackOrder
-import org.jellyfin.sdk.model.api.PlaybackProgressInfo
-import org.jellyfin.sdk.model.api.PlaybackStartInfo
-import org.jellyfin.sdk.model.api.PlaybackStopInfo
-import org.jellyfin.sdk.model.api.RepeatMode
 import org.jellyfin.sdk.model.extensions.inWholeTicks
 import timber.log.Timber
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Fork: offline. Reports playback of downloaded videos.
+ * Fork: offline. Records playback of downloaded videos.
  *
- * Upstream doesn't report local playback to the server at all. Here every event is first written to the local
- * [PlayStateEntity] (marked dirty), then sent to the server like a streamed video would be. When the server
- * accepted it the row is marked clean again, otherwise [OfflineSyncScheduler] sends it once a connection is
- * available.
+ * Upstream doesn't report local playback to the server at all. Here every event updates the local
+ * [PlayStateEntity] (marked dirty) the same way the server would update its watch state, and [PlayStateSync]
+ * sends it: right away for stops and skips, at most every minute for progress, and through
+ * [OfflineSyncScheduler] once a connection is available again.
+ *
+ * No playback sessions are reported, the server only gets the resulting watch state.
  */
 class OfflinePlayback(
     private val downloadDao: DownloadDao,
     private val offlineDao: OfflineDao,
-    private val apiClients: OfflineApiClients,
+    private val playStateSync: PlayStateSync,
     private val syncScheduler: OfflineSyncScheduler,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -45,18 +37,14 @@ class OfflinePlayback(
     /** Local state changes are applied strictly in order. */
     private val localEvents = Channel<suspend () -> Unit>(Channel.UNLIMITED)
 
-    /** Server reports are sent in order too, but separately, so a slow server doesn't delay local writes. */
-    private val serverMutex = Mutex()
+    private val lastPushAttempt = ConcurrentHashMap<UUID, Long>()
 
-    /** After a failed server request, skip further requests for a while and only record locally. */
     @Volatile
-    private var serverBackoffUntil = 0L
+    private var lastScheduledSync = 0L
 
-    private val owners = ConcurrentHashMap<UUID, Pair<Long, Long>>()
-
-    /** The downloaded item currently playing, it must not be deleted by the cleanup. */
+    /** The downloaded item that is playing or about to play, it must not be deleted by the cleanup. */
     @Volatile
-    var currentItemId: UUID? = null
+    var itemInUse: UUID? = null
         private set
 
     init {
@@ -71,108 +59,72 @@ class OfflinePlayback(
         }
     }
 
-    fun onStart(source: LocalJellyfinMediaSource, positionTicks: Long, isPaused: Boolean) {
-        currentItemId = source.itemId
-        val now = System.currentTimeMillis()
-        record(source.itemId) { owner, old ->
-            val state = updateState(owner, source.itemId, old, positionTicks, old?.played ?: false, now)
-            report(owner, state) { api ->
-                api.playStateApi.reportPlaybackStart(
-                    PlaybackStartInfo(
-                        itemId = source.itemId,
-                        playMethod = PlayMethod.DIRECT_PLAY,
-                        playSessionId = source.playSessionId,
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                        isMuted = false,
-                        canSeek = true,
-                        repeatMode = RepeatMode.REPEAT_NONE,
-                        playbackOrder = PlaybackOrder.DEFAULT,
-                    ),
-                )
-            }
+    /**
+     * The player switches to [itemId] (a downloaded item), or to a streamed item if null.
+     */
+    fun setItemInUse(itemId: UUID?) {
+        itemInUse = itemId
+    }
+
+    fun onStart(source: LocalJellyfinMediaSource, positionTicks: Long) {
+        itemInUse = source.itemId
+        record(source) { owner, old ->
+            // Like the server, starting a video makes it unplayed again until it's watched to the end
+            val state = update(owner, source.itemId, old, positionTicks, played = false)
+            if (old?.played == true) push(state, immediately = true)
         }
     }
 
-    fun onProgress(source: LocalJellyfinMediaSource, positionTicks: Long, isPaused: Boolean) {
-        val now = System.currentTimeMillis()
-        record(source.itemId) { owner, old ->
-            val state = updateState(owner, source.itemId, old, positionTicks, old?.played ?: false, now)
-            report(owner, state) { api ->
-                api.playStateApi.reportPlaybackProgress(
-                    PlaybackProgressInfo(
-                        itemId = source.itemId,
-                        playMethod = PlayMethod.DIRECT_PLAY,
-                        playSessionId = source.playSessionId,
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                        isMuted = false,
-                        canSeek = true,
-                        repeatMode = RepeatMode.REPEAT_NONE,
-                        playbackOrder = PlaybackOrder.DEFAULT,
-                    ),
-                )
-            }
+    fun onProgress(source: LocalJellyfinMediaSource, positionTicks: Long) {
+        record(source) { owner, old ->
+            val state = update(owner, source.itemId, old, positionTicks, played = old?.played ?: false)
+            push(state, immediately = false)
         }
     }
 
     fun onStop(source: LocalJellyfinMediaSource, positionTicks: Long, finished: Boolean) {
-        if (currentItemId == source.itemId) currentItemId = null
-        val now = System.currentTimeMillis()
-        val runTimeTicks = source.runTime.inWholeTicks
-        record(source.itemId) { owner, old ->
+        if (itemInUse == source.itemId) itemInUse = null
+        val runTimeTicks = source.runTime.inWholeTicks.takeIf { it > 0 } ?: source.item?.runTimeTicks ?: 0
+        record(source) { owner, old ->
             val result = PlayStateRules.onStop(positionTicks, runTimeTicks, finished, old?.played ?: false)
-            val state = updateState(owner, source.itemId, old, result.positionTicks, result.played, now)
-            report(owner, state, scheduleOnFailure = true) { api ->
-                api.playStateApi.reportPlaybackStopped(
-                    PlaybackStopInfo(
-                        itemId = source.itemId,
-                        positionTicks = if (finished) runTimeTicks else positionTicks,
-                        playSessionId = source.playSessionId,
-                        failed = false,
-                    ),
-                )
-                // Same as upstream does for streamed videos
-                if (finished) api.playStateApi.markPlayedItem(itemId = source.itemId)
-            }
+            val state = update(owner, source.itemId, old, result.positionTicks, result.played)
+            push(state, immediately = true)
         }
     }
 
     /**
      * Mark a downloaded item as played, e.g. when the user skipped it.
      */
-    fun markPlayed(itemId: UUID) {
-        val now = System.currentTimeMillis()
-        record(itemId) { owner, old ->
-            val state = updateState(owner, itemId, old, 0, true, now)
-            report(owner, state, scheduleOnFailure = true) { api ->
-                api.playStateApi.markPlayedItem(itemId = itemId)
-            }
+    fun markPlayed(source: LocalJellyfinMediaSource) {
+        record(source) { owner, old ->
+            val state = update(owner, source.itemId, old, 0, played = true)
+            push(state, immediately = true)
         }
     }
 
-    private fun record(itemId: UUID, block: suspend (owner: Pair<Long, Long>, old: PlayStateEntity?) -> Unit) {
+    private fun record(source: LocalJellyfinMediaSource, block: suspend (owner: Pair<Long, Long>, old: PlayStateEntity?) -> Unit) {
         localEvents.trySend {
-            val owner = owner(itemId) ?: return@trySend
-            block(owner, offlineDao.getPlayState(owner.first, owner.second, itemId))
+            val owner = owner(source) ?: return@trySend
+            block(owner, offlineDao.getPlayState(owner.first, owner.second, source.itemId))
         }
     }
 
-    private suspend fun owner(itemId: UUID): Pair<Long, Long>? = owners[itemId] ?: withContext(Dispatchers.IO) {
-        downloadDao.getDownloadByItemId(itemId)?.let { download -> download.serverId to download.userId }
-    }?.also { owners[itemId] = it }
+    /**
+     * Server and user of the download that is playing: its id is the play session id of the media source.
+     */
+    private suspend fun owner(source: LocalJellyfinMediaSource): Pair<Long, Long>? {
+        val download = source.playSessionId.toLongOrNull()?.let { downloadDao.getDownload(it) }
+        return download?.let { it.serverId to it.userId }
+    }
 
-    @Suppress("LongParameterList")
-    private suspend fun updateState(
+    private suspend fun update(
         owner: Pair<Long, Long>,
         itemId: UUID,
         old: PlayStateEntity?,
         positionTicks: Long,
         played: Boolean,
-        time: Long,
     ): PlayStateEntity {
-        // Strictly increasing per row, a sync only clears the dirty flag of the exact version it sent
-        val now = maxOf(time, (old?.updatedAt ?: 0) + 1)
+        val now = System.currentTimeMillis()
         val state = PlayStateEntity(
             serverId = owner.first,
             userId = owner.second,
@@ -182,38 +134,33 @@ class OfflinePlayback(
             lastPlayedAt = now,
             playedAt = if (played) old?.playedAt?.takeIf { old.played } ?: now else null,
             dirty = true,
-            updatedAt = now,
+            // Strictly increasing per row, a sync only clears the dirty flag of the exact version it sent
+            updatedAt = maxOf(now, (old?.updatedAt ?: 0) + 1),
+            serverPlayed = old?.serverPlayed,
+            serverLastPlayedAt = old?.serverLastPlayedAt,
         )
         offlineDao.upsertPlayState(state)
         return state
     }
 
-    private fun report(
-        owner: Pair<Long, Long>,
-        state: PlayStateEntity,
-        scheduleOnFailure: Boolean = false,
-        request: suspend (org.jellyfin.sdk.api.client.ApiClient) -> Unit,
-    ) {
-        if (System.currentTimeMillis() < serverBackoffUntil) {
-            if (scheduleOnFailure) syncScheduler.syncSoon()
-            return
-        }
+    private fun push(state: PlayStateEntity, immediately: Boolean) {
+        val now = System.currentTimeMillis()
+        if (!immediately && now - (lastPushAttempt[state.itemId] ?: 0) < PROGRESS_PUSH_INTERVAL_MS) return
+        lastPushAttempt[state.itemId] = now
         scope.launch {
-            serverMutex.withLock {
-                try {
-                    val target = apiClients.get(owner.first, owner.second) ?: error("Unknown server user $owner")
-                    request(target.api)
-                    offlineDao.markPlayStateClean(state.serverId, state.userId, state.itemId, state.updatedAt)
-                } catch (e: Exception) {
-                    Timber.i("Server unreachable for local playback report, keeping it for later: %s", e.message)
-                    serverBackoffUntil = System.currentTimeMillis() + SERVER_BACKOFF_MS
-                    syncScheduler.syncSoon()
-                }
-            }
+            if (!playStateSync.push(state.serverId, state.userId, state.itemId)) scheduleSync()
         }
     }
 
+    private fun scheduleSync() {
+        val now = System.currentTimeMillis()
+        if (now - lastScheduledSync < SCHEDULE_INTERVAL_MS) return
+        lastScheduledSync = now
+        syncScheduler.syncSoon()
+    }
+
     private companion object {
-        const val SERVER_BACKOFF_MS = 60_000L
+        const val PROGRESS_PUSH_INTERVAL_MS = 60_000L
+        const val SCHEDULE_INTERVAL_MS = 5 * 60_000L
     }
 }

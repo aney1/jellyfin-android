@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.ApiClientController
 import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.downloads.DownloadStatus
 import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.playback.OfflinePlayback
@@ -70,17 +71,25 @@ class OfflineMaintenance(
     private suspend fun deleteExpired() {
         val deleteAfter = preferences.deleteWatchedAfter ?: return
         val downloads = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
-        for ((serverId, serverDownloads) in downloads.groupBy { it.serverId }) {
+        // Only finished downloads: queued ones may be a re-download the user just asked for
+        val finished = downloads.filter { it.status == DownloadStatus.DOWNLOADED }
+        for ((serverId, serverDownloads) in finished.groupBy { it.serverId }) {
             val states = serverDownloads.mapNotNull { download ->
                 offlineDao.getPlayState(serverId, download.userId, download.itemId)?.let { state ->
-                    OfflineRules.WatchState(state.itemId, state.played, state.playedAt, state.dirty)
+                    OfflineRules.WatchState(
+                        itemId = state.itemId,
+                        played = state.played,
+                        playedAt = state.playedAt,
+                        dirty = state.dirty,
+                        downloadedAt = maxOf(download.createdAt, download.modifiedAt),
+                    )
                 }
             }
             val expired = OfflineRules.expiredWatched(
                 states = states,
                 now = System.currentTimeMillis(),
                 deleteAfter = deleteAfter,
-                playingItemId = offlinePlayback.currentItemId,
+                playingItemId = offlinePlayback.itemInUse,
             )
             for (itemId in expired) {
                 Timber.i("Deleting watched download %s", itemId)

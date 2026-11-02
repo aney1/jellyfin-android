@@ -132,6 +132,7 @@ class QueueManager(
         resumeFromSavedPosition: Boolean = false,
     ): PlayerException? {
         val localCopy = offlineQueue.localCopyFor(itemId, mediaSourceId, downloadsOnlyQueue)
+        offlineQueue.onItemStarting(localCopy)
         if (localCopy != null) {
             // The previous item may still be transcoding on the server
             (getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource)?.let { oldMediaSource ->

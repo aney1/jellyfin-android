@@ -33,14 +33,37 @@ interface OfflineDao {
     suspend fun upsertPlayState(entity: PlayStateEntity)
 
     /**
-     * Clear the dirty flag only if the row didn't change since it was read, so a newer local change made while
-     * syncing is not lost.
+     * Mark the row as in sync with the server, only if it didn't change since it was read, so a newer local
+     * change made while syncing is not lost.
      */
     @Query(
-        "UPDATE play_state SET dirty = 0 " +
+        "UPDATE play_state SET dirty = 0, server_played = :serverPlayed, server_last_played_at = :serverLastPlayedAt " +
             "WHERE server_id = :serverId AND user_id = :userId AND item_id = :itemId AND updated_at = :updatedAt",
     )
-    suspend fun markPlayStateClean(serverId: Long, userId: Long, itemId: UUID, updatedAt: Long): Int
+    @Suppress("LongParameterList")
+    suspend fun markPlayStateSynced(
+        serverId: Long,
+        userId: Long,
+        itemId: UUID,
+        updatedAt: Long,
+        serverPlayed: Boolean,
+        serverLastPlayedAt: Long?,
+    ): Int
+
+    /**
+     * Replace a row with the server's state, unless it was changed locally since [expectedUpdatedAt] was read
+     * (or, without an expected version, unless it has unsent local changes).
+     */
+    @Transaction
+    suspend fun replaceWithServerState(entity: PlayStateEntity, expectedUpdatedAt: Long?): Boolean {
+        val current = getPlayState(entity.serverId, entity.userId, entity.itemId)
+        val unchanged = when (expectedUpdatedAt) {
+            null -> current == null || !current.dirty
+            else -> current != null && current.updatedAt == expectedUpdatedAt
+        }
+        if (unchanged && current != entity) upsertPlayState(entity)
+        return unchanged
+    }
 
     @Query("SELECT * FROM play_state WHERE dirty = 0")
     suspend fun getCleanPlayStates(): List<PlayStateEntity>
@@ -55,6 +78,12 @@ interface OfflineDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDownloadOrigins(entities: List<DownloadOriginEntity>)
+
+    @Query("UPDATE download_origin SET missing_count = :missingCount WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId")
+    suspend fun setOriginMissingCount(serverId: Long, itemId: UUID, playlistId: UUID, missingCount: Int)
+
+    @Query("DELETE FROM download_origin WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId")
+    suspend fun deleteDownloadOrigin(serverId: Long, itemId: UUID, playlistId: UUID)
 
     @Query("DELETE FROM download_origin WHERE server_id = :serverId AND item_id = :itemId")
     suspend fun deleteDownloadOrigins(serverId: Long, itemId: UUID)

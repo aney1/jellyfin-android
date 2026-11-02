@@ -62,11 +62,13 @@ object OfflineRules {
         val played: Boolean,
         val playedAt: Long?,
         val dirty: Boolean,
+        /** When the download was requested, a re-download of something watched long ago gets the full period. */
+        val downloadedAt: Long,
     )
 
     /**
-     * Downloaded videos whose delete period after being watched has passed. Videos with watch state changes not
-     * yet sent to the server are kept until they are.
+     * Downloaded videos whose delete period after being watched (or after being downloaded, whichever is later)
+     * has passed. Videos with watch state changes not yet sent to the server are kept until they are.
      */
     fun expiredWatched(
         states: List<WatchState>,
@@ -80,7 +82,7 @@ object OfflineRules {
                 !state.dirty &&
                 state.playedAt != null &&
                 state.itemId != playingItemId &&
-                now - state.playedAt >= deleteAfter.inWholeMilliseconds
+                now - maxOf(state.playedAt, state.downloadedAt) >= deleteAfter.inWholeMilliseconds
         }.map { it.itemId }.toSet()
     }
 }

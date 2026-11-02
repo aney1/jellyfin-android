@@ -28,7 +28,15 @@ data class PlayStateEntity(
     /** Since when the item counts as played (epoch millis), drives the auto delete expiry. */
     @ColumnInfo(name = "played_at") val playedAt: Long?,
     @ColumnInfo(name = "dirty") val dirty: Boolean,
+    /** Version of the local state, strictly increasing per row; a sync only clears the version it sent. */
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    /**
+     * The server's played flag when this row was last in sync with the server, null if never. Used to tell
+     * whether the server state was changed elsewhere since (e.g. marked unplayed in the web app).
+     */
+    @ColumnInfo(name = "server_played") val serverPlayed: Boolean? = null,
+    /** The server's last played date (epoch millis) when this row was last in sync with the server. */
+    @ColumnInfo(name = "server_last_played_at") val serverLastPlayedAt: Long? = null,
 )
 
 /**
@@ -41,6 +49,11 @@ data class DownloadOriginEntity(
     @ColumnInfo(name = "item_id") val itemId: UUID,
     @ColumnInfo(name = "playlist_id") val playlistId: UUID,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    /**
+     * How many playlist refreshes in a row didn't contain the item. A download is only removed after it was
+     * missing twice, so a single empty or partial server response doesn't delete anything.
+     */
+    @ColumnInfo(name = "missing_count") val missingCount: Int = 0,
 )
 
 enum class PlaylistDownloadMode {

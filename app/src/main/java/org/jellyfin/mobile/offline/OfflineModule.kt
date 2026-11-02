@@ -33,7 +33,7 @@ val offlineModule = module {
     single { LocalCopyResolver(androidContext(), get()) }
     single { OfflineSyncScheduler(androidContext()) }
     single { OfflinePlayback(get(), get(), get(), get()) }
-    single { OfflineQueueSupport(get(), get(), get(), get(), get()) }
+    single { OfflineQueueSupport(get(), get(), get(), get(), get(), get()) }
     single { PlayStateSync(get(), get()) }
     single { DownloadExtras(androidContext(), get(), get()) }
     single { OfflineDownloads(get(), get(), get(), get(), get(), get(), get(), get()) }

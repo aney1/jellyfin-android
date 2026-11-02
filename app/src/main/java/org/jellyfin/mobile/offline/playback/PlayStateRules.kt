@@ -15,11 +15,13 @@ object PlayStateRules {
 
     /**
      * @param finished whether playback reached the end of the video.
-     * @param wasPlayed whether the item already counted as played before; a short rewatch doesn't unmark it.
+     * @param wasPlayed whether the item counted as played before the stop (starting playback unmarks it).
      */
     fun onStop(positionTicks: Long, runTimeTicks: Long, finished: Boolean, wasPlayed: Boolean): Result {
         if (finished) return Result(played = true, positionTicks = 0)
-        if (runTimeTicks <= 0) return Result(played = true, positionTicks = 0)
+        // Unknown length: unlike the server (which marks it played), keep the position, so a missing run time
+        // never makes a download count as watched and get deleted
+        if (runTimeTicks <= 0) return Result(played = wasPlayed, positionTicks = positionTicks)
         if (positionTicks <= 0) return Result(played = wasPlayed, positionTicks = 0)
 
         val percent = positionTicks.toDouble() * PERCENT / runTimeTicks

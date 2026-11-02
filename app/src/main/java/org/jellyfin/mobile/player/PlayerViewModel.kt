@@ -38,6 +38,7 @@ import org.jellyfin.mobile.BuildConfig
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.app.PLAYER_EVENT_CHANNEL
+import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.interaction.PlayerLifecycleObserver
 import org.jellyfin.mobile.player.interaction.PlayerMediaSessionCallback
@@ -45,7 +46,6 @@ import org.jellyfin.mobile.player.interaction.PlayerNotificationHelper
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.queue.QueueManager
-import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
@@ -344,7 +344,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             }
         } else if (jellyfinMediaSource is LocalJellyfinMediaSource) {
             // Fork: offline - downloaded copies report too, recorded locally while offline
-            offlinePlayback.onStart(jellyfinMediaSource, jellyfinMediaSource.startTime.inWholeTicks, !playWhenReady)
+            offlinePlayback.onStart(jellyfinMediaSource, jellyfinMediaSource.startTime.inWholeTicks)
         }
     }
 
@@ -474,7 +474,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         // Fork: offline
         (mediaSourceOrNull as? LocalJellyfinMediaSource)?.let { localSource ->
             if (playbackState != Player.STATE_ENDED) {
-                offlinePlayback.onProgress(localSource, currentPosition.milliseconds.inWholeTicks, !isPlaying)
+                offlinePlayback.onProgress(localSource, currentPosition.milliseconds.inWholeTicks)
             }
             return
         }
@@ -736,13 +736,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             // Capture the current item before advancing so it can be marked as played.
             val skippedItemId = mediaSourceOrNull?.itemId
             // Fork: offline - a skipped downloaded copy is recorded locally, so it also works offline
-            val skippedLocally = mediaSourceOrNull is LocalJellyfinMediaSource
+            val skippedLocalSource = mediaSourceOrNull as? LocalJellyfinMediaSource
             // Actively skipping a video with the skip button marks it as played. This only
             // runs for an explicit user skip; automatic advancement at the end of a video
             // goes through onPlayerStateChanged (STATE_ENDED) instead.
             if (queueManager.next() && skippedItemId != null) {
-                if (skippedLocally) {
-                    offlinePlayback.markPlayed(skippedItemId)
+                if (skippedLocalSource != null) {
+                    offlinePlayback.markPlayed(skippedLocalSource)
                     return@launch
                 }
                 try {

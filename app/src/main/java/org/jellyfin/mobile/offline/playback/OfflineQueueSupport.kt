@@ -28,6 +28,7 @@ class OfflineQueueSupport(
     private val localCopyResolver: LocalCopyResolver,
     private val offlineDao: OfflineDao,
     private val apiClients: OfflineApiClients,
+    private val offlinePlayback: OfflinePlayback,
 ) {
     /** Subtitles of the last played downloads, handed from starting an item to building its media source. */
     private val subtitleConfigurations = object : LinkedHashMap<UUID, List<MediaItem.SubtitleConfiguration>>(
@@ -61,6 +62,11 @@ class OfflineQueueSupport(
         if (hasExternalSubtitles && offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone != true) return null
         return copy
     }
+
+    /**
+     * The queue starts [localCopy], or a streamed item if null: protects the download from the cleanup.
+     */
+    fun onItemStarting(localCopy: LocalCopyResolver.LocalCopy?) = offlinePlayback.setItemInUse(localCopy?.download?.itemId)
 
     /**
      * Full item details (chapters, ...) fetched after the download finished, or the download's own copy.

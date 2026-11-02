@@ -184,7 +184,7 @@ class PlaylistSync(
                 origins = byItem,
                 snapshots = knownSnapshots,
                 isPlayed = { played[it] ?: false },
-                playingItemId = offlinePlayback.currentItemId,
+                playingItemId = offlinePlayback.itemInUse,
             )
             for (itemId in remove) {
                 Timber.i("Removing download %s, it left its playlist unwatched", itemId)

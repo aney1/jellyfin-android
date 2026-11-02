@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "612defe9b23dd00c7703cba901d2ff3f",
+    "identityHash": "04f336c631879df544cb9d5267d3505b",
     "entities": [
       {
         "tableName": "play_state",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `user_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `position_ticks` INTEGER NOT NULL, `played` INTEGER NOT NULL, `last_played_at` INTEGER, `played_at` INTEGER, `dirty` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`server_id`, `user_id`, `item_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `user_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `position_ticks` INTEGER NOT NULL, `played` INTEGER NOT NULL, `last_played_at` INTEGER, `played_at` INTEGER, `dirty` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `server_played` INTEGER, `server_last_played_at` INTEGER, PRIMARY KEY(`server_id`, `user_id`, `item_id`))",
         "fields": [
           {
             "fieldPath": "serverId",
@@ -59,6 +59,16 @@
             "columnName": "updated_at",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "serverPlayed",
+            "columnName": "server_played",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverLastPlayedAt",
+            "columnName": "server_last_played_at",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -72,7 +82,7 @@
       },
       {
         "tableName": "download_origin",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `playlist_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`server_id`, `item_id`, `playlist_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `playlist_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `missing_count` INTEGER NOT NULL, PRIMARY KEY(`server_id`, `item_id`, `playlist_id`))",
         "fields": [
           {
             "fieldPath": "serverId",
@@ -95,6 +105,12 @@
           {
             "fieldPath": "createdAt",
             "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "missingCount",
+            "columnName": "missing_count",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -346,7 +362,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '612defe9b23dd00c7703cba901d2ff3f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '04f336c631879df544cb9d5267d3505b')"
     ]
   }
 }
