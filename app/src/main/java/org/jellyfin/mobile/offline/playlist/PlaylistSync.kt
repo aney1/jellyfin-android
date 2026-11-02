@@ -23,6 +23,7 @@ import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.MediaType
 import timber.log.Timber
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -39,6 +40,13 @@ class PlaylistSync(
 ) {
     /** One sync at a time, a page visit and the background worker may overlap. */
     private val mutex = Mutex()
+
+    /**
+     * Items whose download was requested recently. A request from the playlist page waits in the activity (download
+     * folder dialog, permission) before the download exists, another sync must not request it again meanwhile:
+     * upstream's DownloadManager would add it twice.
+     */
+    private val recentlyRequested = ConcurrentHashMap<UUID, Long>()
 
     /**
      * How downloads get started: through the activity for actions of the user (asks for the download folder
@@ -123,6 +131,7 @@ class PlaylistSync(
         if (entries != null && itemId in entries) {
             offlineDao.insertDownloadOrigins(listOf(DownloadOriginEntity(playlist.serverId, itemId, playlist.playlistId)))
         }
+        recentlyRequested[itemId] = System.currentTimeMillis()
         enqueuer.enqueue(playlist.serverId, playlist.userId, listOf(itemId))
     }
 
@@ -217,13 +226,16 @@ class PlaylistSync(
 
         val existing = offlineDownloads.downloadsOf(playlist.serverId, wanted)
         // A download the user cancelled is left alone, failed ones are retried
+        val now = System.currentTimeMillis()
         val missing = wanted.filter { itemId ->
             val download = existing[itemId]
-            download == null || download.status == DownloadStatus.ERROR
+            val pending = download == null && now - (recentlyRequested[itemId] ?: 0) < REQUEST_PENDING_MS
+            !pending && (download == null || download.status == DownloadStatus.ERROR)
         }
         if (missing.isEmpty()) return 0
 
         offlineDao.insertDownloadOrigins(missing.map { DownloadOriginEntity(playlist.serverId, it, playlist.playlistId) })
+        missing.forEach { recentlyRequested[it] = now }
         enqueuer.enqueue(playlist.serverId, playlist.userId, missing)
         Timber.i("Started %d downloads for playlist %s", missing.size, playlist.playlistId)
         return missing.size
@@ -305,5 +317,6 @@ class PlaylistSync(
 
     private companion object {
         val REMOVAL_GRACE = 10.minutes
+        const val REQUEST_PENDING_MS = 10 * 60_000L
     }
 }
