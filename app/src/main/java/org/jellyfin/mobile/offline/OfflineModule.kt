@@ -41,5 +41,5 @@ val offlineModule = module {
     single { OfflineMaintenance(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { OfflineCoordinator(get(), get(), get()) }
 
-    viewModel { OfflineViewModel(get(), get(), get(), get(), get()) }
+    viewModel { OfflineViewModel(get(), get(), get(), get()) }
 }

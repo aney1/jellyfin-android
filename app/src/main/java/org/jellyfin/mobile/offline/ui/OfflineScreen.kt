@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
@@ -31,10 +33,15 @@ import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -54,6 +61,7 @@ import kotlin.time.Duration
 /**
  * Fork: offline. Lists look like the web app's list view: thumbnail, title, details, watch progress.
  */
+@Suppress("LongParameterList")
 @Composable
 fun OfflineScreen(
     state: OfflineViewModel.State,
@@ -61,9 +69,13 @@ fun OfflineScreen(
     serverReachable: Boolean,
     onOpenPlaylist: (OfflineViewModel.Playlist) -> Unit,
     onClosePlaylist: () -> Unit,
-    onPlay: (List<OfflineViewModel.Entry>, OfflineViewModel.Entry) -> Unit,
+    onPlayPlaylist: (List<OfflineViewModel.Entry>, OfflineViewModel.Entry) -> Unit,
+    onPlayVideo: (OfflineViewModel.Entry) -> Unit,
     onReconnect: () -> Unit,
+    onChangeServer: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -90,6 +102,21 @@ fun OfflineScreen(
                     TextButton(onClick = onReconnect) {
                         Text(stringResource(R.string.offline_reconnect))
                     }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Outlined.MoreVert, contentDescription = null)
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                onClick = {
+                                    menuOpen = false
+                                    onChangeServer()
+                                },
+                            ) {
+                                Text(stringResource(R.string.offline_change_server))
+                            }
+                        }
+                    }
                 },
                 backgroundColor = MaterialTheme.colors.primaryVariant,
             )
@@ -103,8 +130,8 @@ fun OfflineScreen(
                 state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-                openPlaylist != null -> EntryList(openPlaylist.entries, onPlay)
-                else -> Overview(state, onOpenPlaylist, onPlay)
+                openPlaylist != null -> EntryList(openPlaylist.entries, onPlayPlaylist)
+                else -> Overview(state, onOpenPlaylist, onPlayVideo)
             }
         }
     }
@@ -129,7 +156,7 @@ private fun ReachableBanner(onReconnect: () -> Unit) {
 private fun Overview(
     state: OfflineViewModel.State,
     onOpenPlaylist: (OfflineViewModel.Playlist) -> Unit,
-    onPlay: (List<OfflineViewModel.Entry>, OfflineViewModel.Entry) -> Unit,
+    onPlayVideo: (OfflineViewModel.Entry) -> Unit,
 ) {
     if (state.playlists.isEmpty() && state.videos.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -146,8 +173,8 @@ private fun Overview(
         }
         if (state.videos.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.offline_videos)) }
-            items(state.videos, key = { "video-${it.itemId}" }) { entry ->
-                EntryRow(entry, onClick = { onPlay(state.videos, entry) })
+            items(state.videos, key = { "video-${it.position}-${it.itemId}" }) { entry ->
+                EntryRow(entry, onClick = { onPlayVideo(entry) })
             }
         }
     }
@@ -190,7 +217,7 @@ private fun EntryList(
     onPlay: (List<OfflineViewModel.Entry>, OfflineViewModel.Entry) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(entries, key = { it.itemId }) { entry ->
+        items(entries, key = { "${it.position}-${it.itemId}" }) { entry ->
             EntryRow(entry, onClick = { onPlay(entries, entry) })
         }
     }

@@ -14,7 +14,6 @@ import org.jellyfin.mobile.ServerState
 import org.jellyfin.mobile.ui.ComposeFragment
 import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.mobile.utils.Constants
-import org.jellyfin.mobile.utils.extensions.replaceFragment
 import org.jellyfin.mobile.webapp.WebViewFragment
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -48,15 +47,19 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
             serverReachable = serverReachable,
             onOpenPlaylist = { viewModel.openPlaylist(it.id) },
             onClosePlaylist = { viewModel.openPlaylist(null) },
-            onPlay = viewModel::play,
+            onPlayPlaylist = viewModel::playPlaylist,
+            onPlayVideo = viewModel::playVideo,
             onReconnect = ::reconnect,
+            onChangeServer = viewModel::changeServer,
         )
     }
 
     private fun reconnect() {
         val server = (mainViewModel.serverState.value as? ServerState.Available)?.server ?: return
         if (!isAdded || parentFragmentManager.isStateSaved) return
-        parentFragmentManager.replaceFragment<WebViewFragment>(
+        // Keeps a (mini) player that is playing a download
+        OfflineNavigation.swap<WebViewFragment>(
+            this,
             Bundle().apply {
                 putParcelable(Constants.FRAGMENT_WEB_VIEW_EXTRA_SERVER, server)
             },
@@ -64,10 +67,10 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
     }
 
     override val canInterceptBackPress: Boolean
-        get() = viewModel.openPlaylist.value != null
+        get() = viewModel.isPlaylistOpen
 
     override fun onInterceptBackPressed(): Boolean {
-        if (viewModel.openPlaylist.value == null) return false
+        if (!viewModel.isPlaylistOpen) return false
         viewModel.openPlaylist(null)
         return true
     }

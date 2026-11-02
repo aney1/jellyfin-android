@@ -4,6 +4,7 @@
     <!-- Offline screen -->
     <string name="offline_title">Offline</string>
     <string name="offline_reconnect">Reconnect</string>
+    <string name="offline_change_server">Change server</string>
     <string name="offline_server_reachable">The server is reachable again</string>
     <string name="offline_empty">No downloaded videos</string>
     <string name="offline_playlists">Playlists</string>
