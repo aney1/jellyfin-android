@@ -1,5 +1,8 @@
 package org.jellyfin.mobile.offline.sync
 
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -27,7 +30,14 @@ class OfflineCoordinator(
     @OptIn(FlowPreview::class)
     fun start() {
         scheduler.schedulePeriodic(preferences.backgroundSync)
-        scheduler.syncAll()
+
+        // Full sync whenever the app comes to the foreground, not on every process start (background wake-ups
+        // by the periodic job, downloads or media buttons already do their own work)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) = scheduler.syncAll()
+            },
+        )
 
         scope.launch {
             downloadDao.getAllDownloads()
@@ -40,9 +50,9 @@ class OfflineCoordinator(
     }
 
     /**
-     * The background sync setting changed.
+     * The background sync setting changed to [enabled].
      */
-    fun onSettingsChanged() = scheduler.schedulePeriodic(preferences.backgroundSync)
+    fun onBackgroundSyncChanged(enabled: Boolean) = scheduler.schedulePeriodic(enabled)
 
     private companion object {
         const val DEBOUNCE_MS = 2_000L

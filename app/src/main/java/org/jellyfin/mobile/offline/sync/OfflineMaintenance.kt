@@ -38,8 +38,9 @@ class OfflineMaintenance(
      * @return true if everything that needs the server was done.
      */
     suspend fun run(includePlaylists: Boolean): Boolean = mutex.withLock {
-        // A worker may run without the app being open, the global api client is configured by the activity
-        if (apiClient.accessToken == null) {
+        // A worker may run without the app being open, the global api client is configured by the activity.
+        // Only fill in a completely unconfigured client, never touch one the app is setting up (server switch).
+        if (apiClient.baseUrl == null && apiClient.accessToken == null) {
             runCatching { apiClientController.loadSavedServerUser() }
         }
 
@@ -71,7 +72,7 @@ class OfflineMaintenance(
         val downloads = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
         for ((serverId, serverDownloads) in downloads.groupBy { it.serverId }) {
             val states = serverDownloads.mapNotNull { download ->
-                offlineDao.getPlayState(serverId, download.itemId)?.let { state ->
+                offlineDao.getPlayState(serverId, download.userId, download.itemId)?.let { state ->
                     OfflineRules.WatchState(state.itemId, state.played, state.playedAt, state.dirty)
                 }
             }
@@ -101,7 +102,9 @@ class OfflineMaintenance(
                 downloadExtras.deleteFiles(cache.serverId, cache.itemId)
             }
         }
-        val keep = downloaded.map { it.second } + offlineDao.getAllPlaylistEntries().map { it.itemId }
-        offlineDao.deleteCleanPlayStatesExcept(keep.toSet())
+        val keep = (downloaded.map { it.second } + offlineDao.getAllPlaylistEntries().map { it.itemId }).toSet()
+        for (state in offlineDao.getCleanPlayStates()) {
+            if (state.itemId !in keep) offlineDao.deletePlayState(state.serverId, state.userId, state.itemId)
+        }
     }
 }

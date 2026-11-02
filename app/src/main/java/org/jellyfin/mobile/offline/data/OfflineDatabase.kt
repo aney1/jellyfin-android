@@ -68,5 +68,6 @@ abstract class OfflineDatabase : RoomDatabase() {
  */
 val OfflineJson = Json {
     ignoreUnknownKeys = true
+    coerceInputValues = true
     explicitNulls = false
 }

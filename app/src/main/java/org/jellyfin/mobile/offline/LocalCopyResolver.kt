@@ -14,8 +14,9 @@ import org.jellyfin.mobile.downloads.DownloadStatus
 import java.util.UUID
 
 /**
- * Fork: offline. Finds downloads that can actually be played: upstream's `getDownloadByItemId` also returns
- * queued, failed and cancelled downloads, and the file may have been removed from the storage location.
+ * Fork: offline. Finds downloads that can actually be played: upstream's `getDownloadByItemId` returns any one
+ * row for the item id, also queued, failed and cancelled downloads or one of another server, and the file may
+ * have been removed from the storage location.
  */
 class LocalCopyResolver(
     private val context: Context,
@@ -27,10 +28,20 @@ class LocalCopyResolver(
         val primaryImageUri: Uri?,
     )
 
-    suspend fun find(itemId: UUID): LocalCopy? = withContext(Dispatchers.IO) {
-        val download = downloadDao.getDownloadByItemId(itemId) ?: return@withContext null
-        if (download.status != DownloadStatus.DOWNLOADED) return@withContext null
-        toLocalCopy(DownloadFiles(download, downloadDao.getFiles(download.id)))
+    /**
+     * @param serverId only accept a download of this server, null for any server.
+     * @param userId only accept a download of this user, null for any user.
+     */
+    suspend fun find(itemId: UUID, serverId: Long? = null, userId: Long? = null): LocalCopy? = withContext(Dispatchers.IO) {
+        val candidates = downloadDao.getDownloadsByItemIds(listOf(itemId)).filter { download ->
+            download.status == DownloadStatus.DOWNLOADED &&
+                (serverId == null || download.serverId == serverId) &&
+                (userId == null || download.userId == userId)
+        }
+        for (download in candidates) {
+            toLocalCopy(DownloadFiles(download, downloadDao.getFiles(download.id)))?.let { return@withContext it }
+        }
+        null
     }
 
     /**
@@ -46,13 +57,15 @@ class LocalCopyResolver(
     private fun toLocalCopy(downloadFiles: DownloadFiles): LocalCopy? {
         val mainFile = downloadFiles.files.find { it.type == DownloadFileType.ITEM && it.status == DownloadStatus.DOWNLOADED }
             ?: return null
-        if (!exists(mainFile.uri)) return null
+        if (!exists(mainFile.uri, mainFile.size)) return null
         val image = downloadFiles.files.find { it.type == DownloadFileType.IMAGE_PRIMARY && it.status == DownloadStatus.DOWNLOADED }
         return LocalCopy(downloadFiles.download, mainFile.uri, image?.uri)
     }
 
-    private fun exists(uri: Uri): Boolean = try {
-        DocumentFile.fromSingleUri(context, uri)?.exists() == true
+    private fun exists(uri: Uri, expectedSize: Long): Boolean = try {
+        val file = DocumentFile.fromSingleUri(context, uri)
+        // Same check as upstream's StorageManager.verify: present and complete
+        file != null && file.exists() && (expectedSize <= 0 || file.length() == expectedSize)
     } catch (e: SecurityException) {
         // Storage location permission was revoked
         false

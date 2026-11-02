@@ -44,6 +44,11 @@ class OfflineDownloads(
             Timber.i("No download folder set, skipping %d playlist downloads", itemIds.size)
             return@Enqueuer
         }
+        // Upstream's DownloadManager fetches the items with the app's current api client
+        if (serverId != appPreferences.currentServerId || userId != appPreferences.currentUserId) {
+            Timber.i("Playlist belongs to another server or user, skipping %d downloads", itemIds.size)
+            return@Enqueuer
+        }
         val (server, user) = withContext(Dispatchers.IO) { serverDao.getServer(serverId) to userDao.getUser(userId) }
         if (server == null || user == null) return@Enqueuer
         downloadManager.enqueueItems(server, user, itemIds)

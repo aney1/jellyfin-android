@@ -59,7 +59,7 @@ class OfflineQueueSupport(
      * state if it answers quickly, then the last known state.
      */
     suspend fun resumePosition(download: DownloadEntity, allowNetwork: Boolean): Duration? {
-        val local = offlineDao.getPlayState(download.serverId, download.itemId)
+        val local = offlineDao.getPlayState(download.serverId, download.userId, download.itemId)
         val ticks = when {
             local?.dirty == true -> local.positionTicks
             else -> {

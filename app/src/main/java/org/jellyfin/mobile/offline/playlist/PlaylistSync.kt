@@ -137,7 +137,7 @@ class PlaylistSync(
         val current = offlineDao.getPlaylist(playlist.serverId, playlist.playlistId) ?: playlist
         val excluded = offlineDao.getExclusions(playlist.serverId, playlist.playlistId).map { it.itemId }.toSet()
         val ruleEntries = entries.map { entry ->
-            val state = offlineDao.getPlayState(playlist.serverId, entry.itemId)
+            val state = offlineDao.getPlayState(playlist.serverId, playlist.userId, entry.itemId)
             OfflineRules.Entry(
                 itemId = entry.itemId,
                 isVideo = entry.item.mediaType == MediaType.VIDEO,
@@ -179,7 +179,7 @@ class PlaylistSync(
 
         for ((serverId, serverOrigins) in origins.groupBy { it.serverId }) {
             val byItem = serverOrigins.groupBy { it.itemId }.mapValues { (_, list) -> list.map { it.playlistId }.toSet() }
-            val played = byItem.keys.associateWith { offlineDao.getPlayState(serverId, it)?.played ?: false }
+            val played = byItem.keys.associateWith { offlineDao.isPlayedByAnyUser(serverId, it) }
             val remove = OfflineRules.removedUnwatched(
                 origins = byItem,
                 snapshots = knownSnapshots,

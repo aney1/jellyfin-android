@@ -154,7 +154,7 @@ class OfflinePlayback(
     private fun record(itemId: UUID, block: suspend (owner: Pair<Long, Long>, old: PlayStateEntity?) -> Unit) {
         localEvents.trySend {
             val owner = owner(itemId) ?: return@trySend
-            block(owner, offlineDao.getPlayState(owner.first, itemId))
+            block(owner, offlineDao.getPlayState(owner.first, owner.second, itemId))
         }
     }
 
@@ -169,8 +169,10 @@ class OfflinePlayback(
         old: PlayStateEntity?,
         positionTicks: Long,
         played: Boolean,
-        now: Long,
+        time: Long,
     ): PlayStateEntity {
+        // Strictly increasing per row, a sync only clears the dirty flag of the exact version it sent
+        val now = maxOf(time, (old?.updatedAt ?: 0) + 1)
         val state = PlayStateEntity(
             serverId = owner.first,
             userId = owner.second,
@@ -201,7 +203,7 @@ class OfflinePlayback(
                 try {
                     val target = apiClients.get(owner.first, owner.second) ?: error("Unknown server user $owner")
                     request(target.api)
-                    offlineDao.markPlayStateClean(state.serverId, state.itemId, state.updatedAt)
+                    offlineDao.markPlayStateClean(state.serverId, state.userId, state.itemId, state.updatedAt)
                 } catch (e: Exception) {
                     Timber.i("Server unreachable for local playback report, keeping it for later: %s", e.message)
                     serverBackoffUntil = System.currentTimeMillis() + SERVER_BACKOFF_MS

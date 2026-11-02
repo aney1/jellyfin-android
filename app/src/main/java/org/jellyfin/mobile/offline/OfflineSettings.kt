@@ -32,8 +32,9 @@ fun PreferenceScreen.Builder.offlineSettings() {
         titleRes = R.string.pref_offline_background_sync
         summaryRes = R.string.pref_offline_background_sync_summary
         defaultValue = true
-        defaultOnCheckedChange {
-            GlobalContext.get().get<OfflineCoordinator>().onSettingsChanged()
+        defaultOnCheckedChange { checked ->
+            // Called before the new value is stored, so pass it on
+            GlobalContext.get().get<OfflineCoordinator>().onBackgroundSyncChanged(checked)
         }
     }
     checkBox(OfflinePreferences.PREF_OPEN_OFFLINE_SCREEN) {

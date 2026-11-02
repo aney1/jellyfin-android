@@ -42,7 +42,7 @@ class PlayStateSync(
     private suspend fun push(state: PlayStateEntity) {
         val target = apiClients.get(state.serverId, state.userId) ?: run {
             // The user is gone (logged out / server removed), nothing to sync to anymore
-            offlineDao.markPlayStateClean(state.serverId, state.itemId, state.updatedAt)
+            offlineDao.markPlayStateClean(state.serverId, state.userId, state.itemId, state.updatedAt)
             return
         }
         val serverData = target.api.itemsApi.getItemUserData(state.itemId, target.userId).content
@@ -63,7 +63,7 @@ class PlayStateSync(
                 lastPlayedDate = state.lastPlayedAt?.toLocalDateTime(),
             ),
         )
-        offlineDao.markPlayStateClean(state.serverId, state.itemId, state.updatedAt)
+        offlineDao.markPlayStateClean(state.serverId, state.userId, state.itemId, state.updatedAt)
     }
 
     /**
@@ -89,7 +89,7 @@ class PlayStateSync(
     suspend fun applyServerItems(serverId: Long, userId: Long, items: List<BaseItemDto>) {
         for (item in items) {
             val userData = item.userData ?: continue
-            val existing = offlineDao.getPlayState(serverId, item.id)
+            val existing = offlineDao.getPlayState(serverId, userId, item.id)
             if (existing?.dirty == true) continue
             val updated = (existing ?: emptyState(serverId, userId, item.id)).fromServer(userData)
             if (updated != existing) offlineDao.upsertPlayState(updated)

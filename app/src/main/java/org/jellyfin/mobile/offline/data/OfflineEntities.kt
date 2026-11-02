@@ -16,7 +16,7 @@ import java.util.UUID
  * The latest known watch state of an item, used for offline resume, the offline screen and auto delete.
  * When [dirty] is set the state was changed locally and still has to be sent to the server.
  */
-@Entity(tableName = "play_state", primaryKeys = ["server_id", "item_id"])
+@Entity(tableName = "play_state", primaryKeys = ["server_id", "user_id", "item_id"])
 data class PlayStateEntity(
     @ColumnInfo(name = "server_id") val serverId: Long,
     @ColumnInfo(name = "user_id") val userId: Long,

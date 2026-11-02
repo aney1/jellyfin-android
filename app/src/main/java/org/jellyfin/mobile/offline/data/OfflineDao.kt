@@ -14,8 +14,14 @@ import java.util.UUID
 interface OfflineDao {
     // Play state
 
-    @Query("SELECT * FROM play_state WHERE server_id = :serverId AND item_id = :itemId")
-    suspend fun getPlayState(serverId: Long, itemId: UUID): PlayStateEntity?
+    @Query("SELECT * FROM play_state WHERE server_id = :serverId AND user_id = :userId AND item_id = :itemId")
+    suspend fun getPlayState(serverId: Long, userId: Long, itemId: UUID): PlayStateEntity?
+
+    /**
+     * Whether any user of the server watched the item, used where the owning user isn't known.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM play_state WHERE server_id = :serverId AND item_id = :itemId AND played = 1)")
+    suspend fun isPlayedByAnyUser(serverId: Long, itemId: UUID): Boolean
 
     @Query("SELECT * FROM play_state")
     fun observePlayStates(): Flow<List<PlayStateEntity>>
@@ -30,11 +36,17 @@ interface OfflineDao {
      * Clear the dirty flag only if the row didn't change since it was read, so a newer local change made while
      * syncing is not lost.
      */
-    @Query("UPDATE play_state SET dirty = 0 WHERE server_id = :serverId AND item_id = :itemId AND updated_at = :updatedAt")
-    suspend fun markPlayStateClean(serverId: Long, itemId: UUID, updatedAt: Long): Int
+    @Query(
+        "UPDATE play_state SET dirty = 0 " +
+            "WHERE server_id = :serverId AND user_id = :userId AND item_id = :itemId AND updated_at = :updatedAt",
+    )
+    suspend fun markPlayStateClean(serverId: Long, userId: Long, itemId: UUID, updatedAt: Long): Int
 
-    @Query("DELETE FROM play_state WHERE dirty = 0 AND item_id NOT IN (:keepItemIds)")
-    suspend fun deleteCleanPlayStatesExcept(keepItemIds: Collection<UUID>)
+    @Query("SELECT * FROM play_state WHERE dirty = 0")
+    suspend fun getCleanPlayStates(): List<PlayStateEntity>
+
+    @Query("DELETE FROM play_state WHERE server_id = :serverId AND user_id = :userId AND item_id = :itemId")
+    suspend fun deletePlayState(serverId: Long, userId: Long, itemId: UUID)
 
     // Download origins
 
