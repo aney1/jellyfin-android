@@ -78,7 +78,8 @@ class OfflineMaintenance(
 
         deleteExpired(downloads, refreshedOwners)
         removeOrphans(loadDownloads())
-        complete
+        // Watch states recorded while this run was going: run again (the worker retries incomplete runs)
+        complete && offlineDao.getDirtyPlayStates().isEmpty()
     }
 
     /**

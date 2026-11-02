@@ -55,9 +55,10 @@ class OfflineSyncScheduler(private val context: Context) {
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     /**
-     * Send pending watch states and fetch download extras as soon as possible.
+     * Send pending watch states and fetch download extras as soon as possible. One pending run covers all requests;
+     * changes made while a run is in progress make it retry (see [OfflineMaintenance.run]).
      */
-    fun syncSoon() = enqueue(UNIQUE_SOON, includePlaylists = false, policy = ExistingWorkPolicy.APPEND_OR_REPLACE)
+    fun syncSoon() = enqueue(UNIQUE_SOON, includePlaylists = false, policy = ExistingWorkPolicy.KEEP)
 
     /**
      * Full run including the playlists, e.g. on app start.
