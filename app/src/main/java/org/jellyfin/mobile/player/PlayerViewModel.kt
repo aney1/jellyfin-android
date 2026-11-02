@@ -38,6 +38,7 @@ import org.jellyfin.mobile.BuildConfig
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.app.PLAYER_EVENT_CHANNEL
+import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.interaction.PlayerLifecycleObserver
@@ -106,6 +107,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     private val appPreferences: AppPreferences by inject()
     private val offlinePlayback: OfflinePlayback by inject() // Fork: offline
+    private val offlinePreferences: OfflinePreferences by inject() // Fork: offline
     private val lifecycleObserver = PlayerLifecycleObserver(this)
     private val audioManager: AudioManager by lazy { getApplication<Application>().getSystemService()!! }
     val notificationHelper: PlayerNotificationHelper by lazy { PlayerNotificationHelper(this) }
@@ -202,6 +204,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 customPrefs = displayPreferencesDto.customPrefs
             } catch (e: ApiClientException) {
                 Timber.e(e, "Failed to load display preferences from API")
+                customPrefs = offlinePreferences.cachedCustomPrefs // Fork: offline
             }
 
             displayPreferences = DisplayPreferences(
@@ -220,6 +223,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 autoPlayNextEpisodeEnabled = userConfig?.enableNextEpisodeAutoPlay ?: false
             } catch (e: ApiClientException) {
                 Timber.e(e, "Failed to load auto play preference")
+                autoPlayNextEpisodeEnabled = offlinePreferences.cachedAutoPlay // Fork: offline
             }
         }
 

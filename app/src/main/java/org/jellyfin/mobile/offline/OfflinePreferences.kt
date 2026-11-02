@@ -51,6 +51,22 @@ class OfflinePreferences(context: Context) {
             return now
         }
 
+    /**
+     * The user's web settings the player loads from the server (autoplay of the next video, skip lengths), stored
+     * for playback while the server can't be reached.
+     */
+    var cachedAutoPlay: Boolean
+        get() = sharedPreferences.getBoolean(PREF_CACHED_AUTO_PLAY, true)
+        set(value) = sharedPreferences.edit().putBoolean(PREF_CACHED_AUTO_PLAY, value).apply()
+
+    var cachedCustomPrefs: Map<String, String?>
+        get() = sharedPreferences.getStringSet(PREF_CACHED_CUSTOM_PREFS, emptySet()).orEmpty().mapNotNull { entry ->
+            entry.split('=', limit = 2).takeIf { it.size == 2 }?.let { (key, value) -> key to value }
+        }.toMap()
+        set(value) = sharedPreferences.edit()
+            .putStringSet(PREF_CACHED_CUSTOM_PREFS, value.mapNotNull { (key, value) -> value?.let { "$key=$it" } }.toSet())
+            .apply()
+
     companion object {
         const val PREF_PREFER_DOWNLOADS = "pref_offline_prefer_downloads"
         const val PREF_OPEN_OFFLINE_SCREEN = "pref_offline_open_offline_screen"
@@ -58,6 +74,8 @@ class OfflinePreferences(context: Context) {
         const val PREF_BACKGROUND_SYNC = "pref_offline_background_sync"
         const val PREF_DELETE_WATCHED_AFTER = "pref_offline_delete_watched_after"
         private const val PREF_DELETE_COUNT_FROM = "pref_offline_delete_count_from"
+        private const val PREF_CACHED_AUTO_PLAY = "pref_offline_cached_auto_play"
+        private const val PREF_CACHED_CUSTOM_PREFS = "pref_offline_cached_custom_prefs"
 
         const val DEFAULT_DELETE_WATCHED_AFTER_DAYS = 1
         const val DELETE_NEVER = -1

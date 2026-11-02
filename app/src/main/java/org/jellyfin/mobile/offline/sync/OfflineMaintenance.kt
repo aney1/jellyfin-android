@@ -15,7 +15,10 @@ import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.playback.OfflinePlayback
 import org.jellyfin.mobile.offline.playlist.OfflineRules
 import org.jellyfin.mobile.offline.playlist.PlaylistSync
+import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.displayPreferencesApi
+import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.model.api.MediaType
 import timber.log.Timber
 
@@ -67,6 +70,8 @@ class OfflineMaintenance(
             }
         }
 
+        cachePlayerSettings()
+
         if (includePlaylists && preferences.backgroundSync) {
             playlistSync.syncAllInBackground(offlineDownloads.backgroundEnqueuer)
         }
@@ -74,6 +79,25 @@ class OfflineMaintenance(
         deleteExpired(downloads, refreshedOwners)
         removeOrphans(loadDownloads())
         complete
+    }
+
+    /**
+     * Keep the user's player settings for playback while offline (the player loads them from the server).
+     */
+    private suspend fun cachePlayerSettings() = withContext(Dispatchers.IO) {
+        try {
+            val user = apiClient.userApi.getCurrentUser().content
+            user.configuration?.let { preferences.cachedAutoPlay = it.enableNextEpisodeAutoPlay }
+            val displayPreferences = apiClient.displayPreferencesApi.getDisplayPreferences(
+                displayPreferencesId = Constants.DISPLAY_PREFERENCES_ID_USER_SETTINGS,
+                client = Constants.DISPLAY_PREFERENCES_CLIENT_EMBY,
+            ).content
+            preferences.cachedCustomPrefs = displayPreferences.customPrefs.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.i("Could not cache player settings: %s", e.message)
+        }
     }
 
     private suspend fun loadDownloads(): List<DownloadEntity> = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
