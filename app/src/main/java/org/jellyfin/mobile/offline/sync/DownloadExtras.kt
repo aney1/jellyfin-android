@@ -6,6 +6,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.downloads.DownloadStatus
 import org.jellyfin.mobile.offline.OfflineApiClients
@@ -16,10 +18,12 @@ import org.jellyfin.mobile.offline.data.SubtitleFileEntity
 import org.jellyfin.mobile.offline.playback.isDownloadableExternalSubtitle
 import org.jellyfin.mobile.player.deviceprofile.CodecHelpers
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
+import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.extensions.mediaSegmentsApi
 import org.jellyfin.sdk.api.client.extensions.subtitleApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
+import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.MediaSegmentDto
 import timber.log.Timber
 import java.io.File
@@ -36,6 +40,7 @@ class DownloadExtras(
     private val context: Context,
     private val offlineDao: OfflineDao,
     private val apiClients: OfflineApiClients,
+    private val okHttpClient: OkHttpClient,
 ) {
     private val segmentsSerializer = ListSerializer(MediaSegmentDto.serializer())
 
@@ -94,6 +99,21 @@ class DownloadExtras(
         return item != null && segments != null && subtitlesDone
     }
 
+    private fun fetch(api: ApiClient, url: String): ByteArray {
+        val authorization = AuthorizationHeaderBuilder.buildHeader(
+            clientName = api.clientInfo.name,
+            clientVersion = api.clientInfo.version,
+            deviceId = api.deviceInfo.id,
+            deviceName = api.deviceInfo.name,
+            accessToken = api.accessToken,
+        )
+        val request = Request.Builder().url(url).header("Authorization", authorization).build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw InvalidStatusException(response.code)
+            return response.body?.bytes() ?: ByteArray(0)
+        }
+    }
+
     private suspend fun <T> runApi(block: suspend () -> T): T? = try {
         block()
     } catch (e: CancellationException) {
@@ -115,16 +135,18 @@ class DownloadExtras(
             if (known != null && known.uri.path?.let(::File)?.exists() == true) continue
 
             try {
-                val content = target.api.subtitleApi.getSubtitle(
+                // The SDK's getSubtitle() expects JSON, subtitles are plain text: fetch the url directly
+                val url = target.api.subtitleApi.getSubtitleUrl(
                     routeItemId = download.itemId,
                     routeMediaSourceId = mediaSourceId,
                     routeIndex = stream.index,
                     routeFormat = format,
-                ).content
+                )
                 val file = subtitleFile(download.serverId, download.itemId, stream.index, format)
                 withContext(Dispatchers.IO) {
+                    val bytes = fetch(target.api, url)
                     file.parentFile?.mkdirs()
-                    file.writeText(content)
+                    file.writeBytes(bytes)
                 }
                 offlineDao.upsertSubtitleFile(
                     SubtitleFileEntity(
