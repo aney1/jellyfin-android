@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.offline.playlist
 
 import java.util.UUID
+import kotlin.time.Duration
 
 /**
  * Fork: offline. The pure decision logic of playlist downloads and auto delete, kept free of Android and
@@ -55,4 +56,31 @@ object OfflineRules {
             playlistIds.all { playlistId -> snapshots[playlistId]?.contains(itemId) == false } &&
             snapshots.values.none { itemId in it }
     }.keys
+
+    data class WatchState(
+        val itemId: UUID,
+        val played: Boolean,
+        val playedAt: Long?,
+        val dirty: Boolean,
+    )
+
+    /**
+     * Downloaded videos whose delete period after being watched has passed. Videos with watch state changes not
+     * yet sent to the server are kept until they are.
+     */
+    fun expiredWatched(
+        states: List<WatchState>,
+        now: Long,
+        deleteAfter: Duration?,
+        playingItemId: UUID?,
+    ): Set<UUID> {
+        if (deleteAfter == null) return emptySet()
+        return states.filter { state ->
+            state.played &&
+                !state.dirty &&
+                state.playedAt != null &&
+                state.itemId != playingItemId &&
+                now - state.playedAt >= deleteAfter.inWholeMilliseconds
+        }.map { it.itemId }.toSet()
+    }
 }

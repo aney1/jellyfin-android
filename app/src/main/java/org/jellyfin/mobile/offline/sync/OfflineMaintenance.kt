@@ -9,6 +9,8 @@ import org.jellyfin.mobile.app.ApiClientController
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.data.OfflineDao
+import org.jellyfin.mobile.offline.playback.OfflinePlayback
+import org.jellyfin.mobile.offline.playlist.OfflineRules
 import org.jellyfin.mobile.offline.playlist.PlaylistSync
 import org.jellyfin.sdk.api.client.ApiClient
 import timber.log.Timber
@@ -16,7 +18,7 @@ import timber.log.Timber
 /**
  * Fork: offline. One maintenance pass, run by [OfflineSyncWorker]:
  * send pending watch states, fetch download extras, refresh watch states (videos watched elsewhere),
- * and sync playlists.
+ * sync playlists, and delete watched downloads whose delete period has passed.
  */
 class OfflineMaintenance(
     private val apiClient: ApiClient,
@@ -28,6 +30,7 @@ class OfflineMaintenance(
     private val downloadExtras: DownloadExtras,
     private val playlistSync: PlaylistSync,
     private val offlineDownloads: OfflineDownloads,
+    private val offlinePlayback: OfflinePlayback,
 ) {
     private val mutex = Mutex()
 
@@ -58,8 +61,31 @@ class OfflineMaintenance(
             playlistSync.syncAllInBackground(offlineDownloads.backgroundEnqueuer)
         }
 
+        deleteExpired()
         removeOrphans()
         complete
+    }
+
+    private suspend fun deleteExpired() {
+        val deleteAfter = preferences.deleteWatchedAfter ?: return
+        val downloads = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
+        for ((serverId, serverDownloads) in downloads.groupBy { it.serverId }) {
+            val states = serverDownloads.mapNotNull { download ->
+                offlineDao.getPlayState(serverId, download.itemId)?.let { state ->
+                    OfflineRules.WatchState(state.itemId, state.played, state.playedAt, state.dirty)
+                }
+            }
+            val expired = OfflineRules.expiredWatched(
+                states = states,
+                now = System.currentTimeMillis(),
+                deleteAfter = deleteAfter,
+                playingItemId = offlinePlayback.currentItemId,
+            )
+            for (itemId in expired) {
+                Timber.i("Deleting watched download %s", itemId)
+                offlineDownloads.delete(serverId, itemId)
+            }
+        }
     }
 
     /**
