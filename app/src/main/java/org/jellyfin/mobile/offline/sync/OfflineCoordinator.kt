@@ -9,7 +9,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.data.dao.DownloadDao
@@ -43,7 +42,6 @@ class OfflineCoordinator(
             downloadDao.getAllDownloads()
                 .map { downloads -> downloads.filter { it.status == DownloadStatus.DOWNLOADED }.map { it.id }.toSet() }
                 .distinctUntilChanged()
-                .drop(1)
                 .debounce(DEBOUNCE_MS)
                 .collect { scheduler.syncSoon() }
         }

@@ -96,15 +96,28 @@ class OfflineMaintenance(
         val downloaded = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
             .map { it.serverId to it.itemId }
             .toSet()
-        for (cache in offlineDao.getItemCaches()) {
-            if ((cache.serverId to cache.itemId) !in downloaded) {
-                offlineDao.deleteItemData(cache.serverId, cache.itemId)
-                downloadExtras.deleteFiles(cache.serverId, cache.itemId)
+        val itemsWithData = offlineDao.getItemCaches().map { it.serverId to it.itemId } +
+            offlineDao.getAllSubtitleFiles().map { it.serverId to it.itemId }
+        for ((serverId, itemId) in itemsWithData.toSet() - downloaded) {
+            offlineDao.deleteItemData(serverId, itemId)
+            downloadExtras.deleteFiles(serverId, itemId)
+        }
+        downloadExtras.deleteStrayFiles(downloaded)
+
+        // Origins are written right before the download is requested, give that some time
+        val now = System.currentTimeMillis()
+        for (origin in offlineDao.getDownloadOrigins()) {
+            if ((origin.serverId to origin.itemId) !in downloaded && now - origin.createdAt > ORIGIN_GRACE_MS) {
+                offlineDao.deleteDownloadOrigins(origin.serverId, origin.itemId)
             }
         }
         val keep = (downloaded.map { it.second } + offlineDao.getAllPlaylistEntries().map { it.itemId }).toSet()
         for (state in offlineDao.getCleanPlayStates()) {
             if (state.itemId !in keep) offlineDao.deletePlayState(state.serverId, state.userId, state.itemId)
         }
+    }
+
+    private companion object {
+        const val ORIGIN_GRACE_MS = 60L * 60 * 1000
     }
 }

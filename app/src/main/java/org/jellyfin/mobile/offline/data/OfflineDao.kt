@@ -111,6 +111,9 @@ interface OfflineDao {
     @Query("SELECT * FROM subtitle_file WHERE server_id = :serverId AND item_id = :itemId ORDER BY stream_index")
     suspend fun getSubtitleFiles(serverId: Long, itemId: UUID): List<SubtitleFileEntity>
 
+    @Query("SELECT * FROM subtitle_file")
+    suspend fun getAllSubtitleFiles(): List<SubtitleFileEntity>
+
     @Upsert
     suspend fun upsertSubtitleFile(entity: SubtitleFileEntity)
 
