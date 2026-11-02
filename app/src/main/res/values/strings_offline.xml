@@ -23,6 +23,7 @@
     <string name="offline_item_title">Video</string>
     <string name="offline_action_download">Download</string>
     <string name="offline_action_delete">Delete download</string>
+    <string name="offline_action_delete_exclude">Delete download and don\'t download again</string>
     <string name="offline_action_exclude">Don\'t download</string>
     <string name="offline_action_include">Allow download</string>
 

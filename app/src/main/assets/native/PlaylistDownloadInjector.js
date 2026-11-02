@@ -11,7 +11,9 @@
 (() => {
     if (!window.NativeOffline) return;
 
-    const POLL_INTERVAL_MS = 2000;
+    // Fast while downloads are running, slow otherwise
+    const POLL_FAST_MS = 2000;
+    const POLL_SLOW_MS = 10000;
     const ROW_ICONS = {
         none: 'file_download',
         cancelled: 'file_download',
@@ -35,6 +37,7 @@
 
     let currentPlaylistId = null;
     let pollTimer = null;
+    let pollInterval = 0;
     let scanTimer = null;
 
     function visibleDetailPage() {
@@ -46,9 +49,22 @@
         return row ? row.getAttribute('data-playlistid') : null;
     }
 
-    function readState(playlistId) {
+    function playlistNameOf(page) {
+        const title = page.querySelector('h1.itemName');
+        return title ? title.textContent.trim() : null;
+    }
+
+    function rowsOf(page) {
+        return [...page.querySelectorAll('#childrenContent .listItem[data-playlistid]')];
+    }
+
+    function rowId(row) {
+        return (row.getAttribute('data-id') || '').replace(/-/g, '').toLowerCase();
+    }
+
+    function readState(playlistId, rows) {
         try {
-            return JSON.parse(window.NativeOffline.getState(playlistId));
+            return JSON.parse(window.NativeOffline.getState(playlistId, rows.map(rowId).join(',')));
         } catch (e) {
             return null;
         }
@@ -89,14 +105,14 @@
 
         let modeButton = buttons.querySelector('.offlineModeButton');
         if (!modeButton) {
-            modeButton = headerButton('offlineModeButton', MODE_ICONS.OFF, 'Download settings', () => window.NativeOffline.openSettings(currentPlaylistId));
+            modeButton = headerButton('offlineModeButton', MODE_ICONS.OFF, 'Download settings', () => window.NativeOffline.openSettings(currentPlaylistId, playlistNameOf(page)));
             buttons.appendChild(modeButton);
         }
         setIcon(modeButton, MODE_ICONS[state.mode] || MODE_ICONS.OFF);
 
         let newButton = buttons.querySelector('.offlineNewButton');
         if (!newButton) {
-            newButton = headerButton('offlineNewButton', 'downloading', 'Download new videos', () => window.NativeOffline.downloadNew(currentPlaylistId));
+            newButton = headerButton('offlineNewButton', 'downloading', 'Download new videos', () => window.NativeOffline.downloadNew(currentPlaylistId, playlistNameOf(page)));
             buttons.appendChild(newButton);
         }
         newButton.classList.toggle('hide', state.mode === 'OFF');
@@ -114,7 +130,7 @@
         if (status.textContent !== text) status.textContent = text;
     }
 
-    function renderRow(row, playlistId, itemState) {
+    function renderRow(page, row, playlistId, itemState) {
         const container = row.querySelector('.listViewUserDataButtons');
         if (!container) return;
         if (row.getAttribute('data-mediatype') && row.getAttribute('data-mediatype') !== 'Video') return;
@@ -129,7 +145,7 @@
             button.addEventListener('click', (event) => {
                 stop(event);
                 const name = row.querySelector('.listItemBodyText');
-                window.NativeOffline.openItemMenu(currentPlaylistId, row.getAttribute('data-id'), name ? name.textContent.trim() : null);
+                window.NativeOffline.openItemMenu(currentPlaylistId, playlistNameOf(page), row.getAttribute('data-id'), name ? name.textContent.trim() : null);
             });
             const menuButton = container.querySelector('[data-action="menu"]');
             container.insertBefore(button, menuButton);
@@ -147,13 +163,19 @@
         const page = visibleDetailPage();
         const playlistId = page && playlistIdOf(page);
         if (!playlistId || playlistId !== currentPlaylistId) return;
-        const state = readState(playlistId);
+        const rows = rowsOf(page);
+        const state = readState(playlistId, rows);
         if (!state || !state.items) return;
         renderHeader(page, playlistId, state);
-        page.querySelectorAll('#childrenContent .listItem[data-playlistid]').forEach((row) => {
-            const id = (row.getAttribute('data-id') || '').replace(/-/g, '').toLowerCase();
-            renderRow(row, playlistId, state.items[id]);
-        });
+        rows.forEach((row) => renderRow(page, row, playlistId, state.items[rowId(row)]));
+        schedulePoll(state.pending ? POLL_FAST_MS : POLL_SLOW_MS);
+    }
+
+    function schedulePoll(interval) {
+        if (pollTimer && pollInterval === interval) return;
+        clearInterval(pollTimer);
+        pollInterval = interval;
+        pollTimer = setInterval(render, interval);
     }
 
     function scan() {
@@ -162,14 +184,14 @@
         const playlistId = page && playlistIdOf(page);
         if (playlistId !== currentPlaylistId) {
             currentPlaylistId = playlistId;
-            if (playlistId) window.NativeOffline.onPlaylistShown(playlistId);
+            if (playlistId) window.NativeOffline.onPlaylistShown(playlistId, playlistNameOf(page));
         }
         if (currentPlaylistId) {
             render();
-            if (!pollTimer) pollTimer = setInterval(render, POLL_INTERVAL_MS);
         } else if (pollTimer) {
             clearInterval(pollTimer);
             pollTimer = null;
+            pollInterval = 0;
         }
     }
 

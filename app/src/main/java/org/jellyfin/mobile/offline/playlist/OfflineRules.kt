@@ -38,23 +38,36 @@ object OfflineRules {
         return (if (maxItems != null) wanted.take(maxItems) else wanted).toList()
     }
 
+    data class Origin(
+        val playlistId: UUID,
+        /** Since when the playlist doesn't contain the item anymore, null while it does. */
+        val missingSince: Long?,
+    )
+
     /**
-     * Downloads that were started for a playlist and left all such playlists while still unwatched.
+     * Candidates for removal: downloads that were started for playlists and left all of them, for at least
+     * [grace] (so one empty or partial server response doesn't delete anything). The caller still has to check
+     * that they are unwatched, with fresh data from the server.
      *
-     * @param origins playlist ids each downloaded item was downloaded for.
-     * @param snapshots current entries of every known playlist. Items still in any known playlist are kept, and
-     * origins pointing to a playlist without a snapshot are treated as still present.
+     * @param origins the playlists each downloaded item was downloaded for.
+     * @param knownSnapshots current entries of every playlist that was refreshed at least once. Items still in any
+     * of them are kept, and origins pointing to a playlist that was never refreshed count as still present.
      */
-    fun removedUnwatched(
-        origins: Map<UUID, Set<UUID>>,
-        snapshots: Map<UUID, Set<UUID>>,
-        isPlayed: (UUID) -> Boolean,
-        playingItemId: UUID?,
-    ): Set<UUID> = origins.filter { (itemId, playlistIds) ->
-        itemId != playingItemId &&
-            !isPlayed(itemId) &&
-            playlistIds.all { playlistId -> snapshots[playlistId]?.contains(itemId) == false } &&
-            snapshots.values.none { itemId in it }
+    fun leftPlaylists(
+        origins: Map<UUID, List<Origin>>,
+        knownSnapshots: Map<UUID, Set<UUID>>,
+        now: Long,
+        grace: Duration,
+        itemInUse: UUID?,
+    ): Set<UUID> = origins.filter { (itemId, itemOrigins) ->
+        itemId != itemInUse &&
+            itemOrigins.isNotEmpty() &&
+            itemOrigins.all { origin ->
+                origin.playlistId in knownSnapshots &&
+                    origin.missingSince != null &&
+                    now - origin.missingSince >= grace.inWholeMilliseconds
+            } &&
+            knownSnapshots.values.none { itemId in it }
     }.keys
 
     data class WatchState(

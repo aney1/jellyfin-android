@@ -50,10 +50,11 @@ data class DownloadOriginEntity(
     @ColumnInfo(name = "playlist_id") val playlistId: UUID,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     /**
-     * How many playlist refreshes in a row didn't contain the item. A download is only removed after it was
-     * missing twice, so a single empty or partial server response doesn't delete anything.
+     * Since when (epoch millis) playlist refreshes don't contain the item anymore, null while it is in the
+     * playlist. A download is only removed after it was missing for a while, so a single empty or partial
+     * server response doesn't delete anything.
      */
-    @ColumnInfo(name = "missing_count") val missingCount: Int = 0,
+    @ColumnInfo(name = "missing_since") val missingSince: Long? = null,
 )
 
 enum class PlaylistDownloadMode {
@@ -94,6 +95,14 @@ data class PlaylistEntryEntity(
     @ColumnInfo(name = "position") val position: Int,
     @ColumnInfo(name = "item_id") val itemId: UUID,
     @ColumnInfo(name = "item") val item: BaseItemDto,
+)
+
+/**
+ * Which item is in which playlist, without loading the stored item details.
+ */
+data class PlaylistMembership(
+    @ColumnInfo(name = "playlist_id") val playlistId: UUID,
+    @ColumnInfo(name = "item_id") val itemId: UUID,
 )
 
 /**

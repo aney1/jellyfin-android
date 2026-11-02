@@ -79,8 +79,14 @@ interface OfflineDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDownloadOrigins(entities: List<DownloadOriginEntity>)
 
-    @Query("UPDATE download_origin SET missing_count = :missingCount WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId")
-    suspend fun setOriginMissingCount(serverId: Long, itemId: UUID, playlistId: UUID, missingCount: Int)
+    @Query(
+        "UPDATE download_origin SET missing_since = :missingSince " +
+            "WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId",
+    )
+    suspend fun setOriginMissingSince(serverId: Long, itemId: UUID, playlistId: UUID, missingSince: Long?)
+
+    @Query("SELECT * FROM download_origin WHERE server_id = :serverId AND item_id = :itemId")
+    suspend fun getDownloadOriginsOfItem(serverId: Long, itemId: UUID): List<DownloadOriginEntity>
 
     @Query("DELETE FROM download_origin WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId")
     suspend fun deleteDownloadOrigin(serverId: Long, itemId: UUID, playlistId: UUID)
@@ -102,8 +108,37 @@ interface OfflineDao {
     @Upsert
     suspend fun upsertPlaylist(entity: PlaylistEntity)
 
+    // Targeted updates, so concurrent syncs and settings changes don't overwrite each other
+
+    @Query("UPDATE playlist SET mode = :mode WHERE server_id = :serverId AND playlist_id = :playlistId")
+    suspend fun updatePlaylistMode(serverId: Long, playlistId: UUID, mode: PlaylistDownloadMode)
+
+    @Query(
+        "UPDATE playlist SET max_items = :maxItems, max_runtime_minutes = :maxRuntimeMinutes " +
+            "WHERE server_id = :serverId AND playlist_id = :playlistId",
+    )
+    suspend fun updatePlaylistLimits(serverId: Long, playlistId: UUID, maxItems: Int?, maxRuntimeMinutes: Int?)
+
+    @Query("UPDATE playlist SET last_synced_at = :lastSyncedAt WHERE server_id = :serverId AND playlist_id = :playlistId")
+    suspend fun updatePlaylistSynced(serverId: Long, playlistId: UUID, lastSyncedAt: Long)
+
+    @Query("UPDATE playlist SET name = :name WHERE server_id = :serverId AND playlist_id = :playlistId")
+    suspend fun updatePlaylistName(serverId: Long, playlistId: UUID, name: String)
+
+    @Query("SELECT item_id FROM playlist_entry WHERE server_id = :serverId AND playlist_id = :playlistId")
+    suspend fun getPlaylistEntryIds(serverId: Long, playlistId: UUID): List<UUID>
+
+    @Query("SELECT DISTINCT playlist_id, item_id FROM playlist_entry")
+    suspend fun getAllPlaylistMemberships(): List<PlaylistMembership>
+
+    @Transaction
+    suspend fun deletePlaylist(serverId: Long, playlistId: UUID) {
+        deletePlaylistEntries(serverId, playlistId)
+        deletePlaylistRow(serverId, playlistId)
+    }
+
     @Query("DELETE FROM playlist WHERE server_id = :serverId AND playlist_id = :playlistId")
-    suspend fun deletePlaylist(serverId: Long, playlistId: UUID)
+    suspend fun deletePlaylistRow(serverId: Long, playlistId: UUID)
 
     @Query("SELECT * FROM playlist_entry WHERE server_id = :serverId AND playlist_id = :playlistId ORDER BY position")
     suspend fun getPlaylistEntries(serverId: Long, playlistId: UUID): List<PlaylistEntryEntity>

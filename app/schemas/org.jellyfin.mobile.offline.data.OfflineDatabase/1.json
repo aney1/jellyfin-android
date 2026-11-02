@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "04f336c631879df544cb9d5267d3505b",
+    "identityHash": "03b44a435b3c60f5f1799cba4e639cb9",
     "entities": [
       {
         "tableName": "play_state",
@@ -82,7 +82,7 @@
       },
       {
         "tableName": "download_origin",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `playlist_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `missing_count` INTEGER NOT NULL, PRIMARY KEY(`server_id`, `item_id`, `playlist_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`server_id` INTEGER NOT NULL, `item_id` TEXT NOT NULL, `playlist_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `missing_since` INTEGER, PRIMARY KEY(`server_id`, `item_id`, `playlist_id`))",
         "fields": [
           {
             "fieldPath": "serverId",
@@ -109,10 +109,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "missingCount",
-            "columnName": "missing_count",
-            "affinity": "INTEGER",
-            "notNull": true
+            "fieldPath": "missingSince",
+            "columnName": "missing_since",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -362,7 +361,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '04f336c631879df544cb9d5267d3505b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '03b44a435b3c60f5f1799cba4e639cb9')"
     ]
   }
 }
