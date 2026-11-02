@@ -144,6 +144,8 @@ class OfflinePlayback(
     }
 
     private fun push(state: PlayStateEntity, immediately: Boolean) {
+        // Watched to the end: let the auto delete look at it soon (it may be set to delete right away)
+        if (state.played) syncScheduler.syncSoon()
         val now = System.currentTimeMillis()
         if (!immediately && now - (lastPushAttempt[state.itemId] ?: 0) < PROGRESS_PUSH_INTERVAL_MS) return
         lastPushAttempt[state.itemId] = now

@@ -108,31 +108,36 @@ class OfflineRulesTest : FunSpec({
     context("expiredWatched") {
         val item = id()
         val now = 10 * day
-        fun state(played: Boolean = true, playedAt: Long? = now - 2 * day, dirty: Boolean = false, downloadedAt: Long = 0) =
+        fun state(played: Boolean = true, playedAt: Long? = now - 2 * day, dirty: Boolean = false, downloadedAt: Long = now - 5 * day) =
             OfflineRules.WatchState(item, played, playedAt, dirty, downloadedAt)
+        fun expired(state: OfflineRules.WatchState, deleteAfter: kotlin.time.Duration? = 1.days, countFrom: Long = 0, inUse: UUID? = null) =
+            OfflineRules.expiredWatched(listOf(state), now, deleteAfter, countFrom, inUse)
 
         test("deleted once the period after watching passed") {
-            OfflineRules.expiredWatched(listOf(state()), now, 1.days, null) shouldBe setOf(item)
+            expired(state()) shouldBe setOf(item)
         }
 
         test("kept within the period") {
-            OfflineRules.expiredWatched(listOf(state(playedAt = now - day / 2)), now, 1.days, null).shouldBeEmpty()
+            expired(state(playedAt = now - day / 2)).shouldBeEmpty()
         }
 
-        test("a re-download of something watched long ago gets the full period") {
-            OfflineRules.expiredWatched(listOf(state(playedAt = now - 30 * day, downloadedAt = now - day / 2)), now, 1.days, null)
-                .shouldBeEmpty()
+        test("watching before the download doesn't count, a re-download to watch again is kept") {
+            expired(state(playedAt = now - 30 * day, downloadedAt = now - 2 * day)).shouldBeEmpty()
+        }
+
+        test("watching before auto delete was enabled doesn't count") {
+            expired(state(), countFrom = now - day).shouldBeEmpty()
         }
 
         test("unsent watch state, unwatched, in use or 'never' keep the download") {
-            OfflineRules.expiredWatched(listOf(state(dirty = true)), now, 1.days, null).shouldBeEmpty()
-            OfflineRules.expiredWatched(listOf(state(played = false)), now, 1.days, null).shouldBeEmpty()
-            OfflineRules.expiredWatched(listOf(state()), now, 1.days, item).shouldBeEmpty()
-            OfflineRules.expiredWatched(listOf(state()), now, null, null).shouldBeEmpty()
+            expired(state(dirty = true)).shouldBeEmpty()
+            expired(state(played = false)).shouldBeEmpty()
+            expired(state(), inUse = item).shouldBeEmpty()
+            expired(state(), deleteAfter = null).shouldBeEmpty()
         }
 
-        test("immediately deletes at the next run") {
-            OfflineRules.expiredWatched(listOf(state(playedAt = now)), now, 0.days, null) shouldBe setOf(item)
+        test("'right after watching' deletes at the next run") {
+            expired(state(playedAt = now), deleteAfter = 0.days) shouldBe setOf(item)
         }
     }
 })

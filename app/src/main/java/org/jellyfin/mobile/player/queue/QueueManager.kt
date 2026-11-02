@@ -132,8 +132,10 @@ class QueueManager(
         resumeFromSavedPosition: Boolean = false,
     ): PlayerException? {
         val localCopy = offlineQueue.localCopyFor(itemId, mediaSourceId, downloadsOnlyQueue)
-        offlineQueue.onItemStarting(localCopy)
         if (localCopy != null) {
+            // Protect the download from the cleanup while it starts; keep the old one if starting fails
+            val previousItemInUse = offlineQueue.itemInUse
+            offlineQueue.itemInUse = itemId
             // The previous item may still be transcoding on the server
             (getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource)?.let { oldMediaSource ->
                 runCatching { viewModel.stopTranscoding(oldMediaSource) }
@@ -146,7 +148,7 @@ class QueueManager(
                 playWhenReady = playWhenReady,
                 resumeFromSavedPosition = resumeFromSavedPosition,
                 localCopy = localCopy,
-            )
+            ).also { error -> if (error != null) offlineQueue.itemInUse = previousItemInUse }
         }
         if (downloadsOnlyQueue) return PlayerException.UnsupportedContent()
         return startRemotePlayback(
@@ -158,7 +160,7 @@ class QueueManager(
             subtitleStreamIndex = subtitleStreamIndex,
             playWhenReady = playWhenReady,
             resumeFromSavedPosition = resumeFromSavedPosition,
-        )
+        ).also { error -> if (error == null) offlineQueue.itemInUse = null }
     }
 
     private suspend fun startDownloadPlayback(
@@ -290,7 +292,7 @@ class QueueManager(
         (getCurrentMediaSourceOrNull() as? LocalJellyfinMediaSource)?.let { localSource ->
             if (downloadsOnlyQueue || playbackRetries++ > 0) return false
             lastPlaybackError = System.currentTimeMillis()
-            return startRemotePlayback(
+            val streamed = startRemotePlayback(
                 itemId = localSource.itemId,
                 mediaSourceId = null,
                 maxStreamingBitrate = queueMaxStreamingBitrate,
@@ -298,6 +300,8 @@ class QueueManager(
                 audioStreamIndex = localSource.selectedAudioStreamIndex,
                 subtitleStreamIndex = localSource.selectedSubtitleStreamIndex,
             ) == null
+            if (streamed) offlineQueue.itemInUse = null
+            return streamed
         }
         val currentMediaSource = getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource ?: return false
 

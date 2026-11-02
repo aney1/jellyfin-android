@@ -64,9 +64,11 @@ class OfflineQueueSupport(
     }
 
     /**
-     * The queue starts [localCopy], or a streamed item if null: protects the download from the cleanup.
+     * The downloaded item the player uses, protected from the cleanup.
      */
-    fun onItemStarting(localCopy: LocalCopyResolver.LocalCopy?) = offlinePlayback.setItemInUse(localCopy?.download?.itemId)
+    var itemInUse: UUID?
+        get() = offlinePlayback.itemInUse
+        set(value) = offlinePlayback.setItemInUse(value)
 
     /**
      * Full item details (chapters, ...) fetched after the download finished, or the download's own copy.

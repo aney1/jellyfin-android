@@ -270,8 +270,14 @@ class PlaylistSync(
             }
             for (itemId in candidates) {
                 if (offlineDao.isPlayedByAnyUser(serverId, itemId)) continue
-                Timber.i("Removing download %s, it left its playlist unwatched", itemId)
-                offlineDownloads.delete(serverId, itemId)
+                try {
+                    val deleted = offlineDownloads.delete(serverId, itemId) { offlinePlayback.itemInUse != itemId }
+                    if (deleted) Timber.i("Removed download %s, it left its playlist unwatched", itemId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "Could not remove download %s", itemId)
+                }
             }
         }
     }

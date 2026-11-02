@@ -29,6 +29,8 @@ class OfflineCoordinator(
     @OptIn(FlowPreview::class)
     fun start() {
         scheduler.schedulePeriodic(preferences.backgroundSync)
+        // Auto delete only counts watching from now on
+        preferences.deleteCountFrom
 
         // Full sync whenever the app comes to the foreground, not on every process start (background wake-ups
         // by the periodic job, downloads or media buttons already do their own work)
@@ -39,11 +41,16 @@ class OfflineCoordinator(
         )
 
         scope.launch {
+            var known = emptySet<Long>()
             downloadDao.getAllDownloads()
                 .map { downloads -> downloads.filter { it.status == DownloadStatus.DOWNLOADED }.map { it.id }.toSet() }
                 .distinctUntilChanged()
                 .debounce(DEBOUNCE_MS)
-                .collect { scheduler.syncSoon() }
+                .collect { finished ->
+                    // Only newly finished downloads need their extras; removals (e.g. auto delete) don't
+                    if ((finished - known).isNotEmpty()) scheduler.syncSoon()
+                    known = finished
+                }
         }
     }
 

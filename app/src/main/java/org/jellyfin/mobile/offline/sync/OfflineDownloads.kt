@@ -3,6 +3,9 @@ package org.jellyfin.mobile.offline.sync
 import android.content.Context
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.app.StorageManager
@@ -35,6 +38,9 @@ class OfflineDownloads(
     private val storageManager: StorageManager,
     private val activityEventHandler: ActivityEventHandler,
 ) {
+    /** Deletions one at a time, each re-checking the download right before removing it. */
+    private val mutex = Mutex()
+
     /**
      * For actions of the user: goes through the activity, which asks for a download folder and the notification
      * permission first if needed.
@@ -76,30 +82,53 @@ class OfflineDownloads(
     /**
      * Delete the download of [itemId] including its files and the fork's extra data.
      *
-     * Deletes the download's own files instead of letting upstream delete its folder: downloads with the same
-     * title share a folder.
+     * [stillWanted] is checked again on the current download right before deleting (it may have been re-queued or
+     * started playing since the caller decided), returning false keeps the download.
+     *
+     * Deletes only the download's own files, and only those no other download uses: upstream puts downloads with
+     * the same title into one folder and reuses files with the same name.
+     *
+     * @return true if the download is gone.
      */
-    suspend fun delete(serverId: Long, itemId: UUID) {
+    suspend fun delete(serverId: Long, itemId: UUID, stillWanted: (DownloadEntity) -> Boolean = { true }): Boolean = mutex.withLock {
         val download = downloadsOf(serverId, listOf(itemId))[itemId]
         if (download != null) {
-            withContext(Dispatchers.IO) { deleteFiles(download) }
+            if (!stillWanted(download)) return@withLock false
+            val filesDeleted = withContext(Dispatchers.IO) { deleteFiles(download) }
+            if (!filesDeleted) {
+                Timber.w("Could not delete the files of download %s, keeping it", itemId)
+                return@withLock false
+            }
             downloadManager.delete(download.id, deleteFiles = false)
         }
         offlineDao.deleteItemData(serverId, itemId)
         downloadExtras.deleteFiles(serverId, itemId)
+        true
     }
 
-    private suspend fun deleteFiles(download: DownloadEntity) {
+    /**
+     * @return false if a file of the download that no other download uses couldn't be deleted.
+     */
+    private suspend fun deleteFiles(download: DownloadEntity): Boolean {
+        val usedElsewhere = downloadDao.getAllDownloadsWithFiles().first()
+            .filter { it.download.id != download.id }
+            .flatMap { other -> other.files.map { it.uri } }
+            .toSet()
+        var success = true
         for (file in downloadDao.getFiles(download.id)) {
+            if (file.uri in usedElsewhere) continue
             try {
-                DocumentFile.fromSingleUri(context, file.uri)?.takeIf { it.exists() }?.delete()
+                val document = DocumentFile.fromSingleUri(context, file.uri)
+                if (document != null && document.exists() && !document.delete()) success = false
             } catch (e: SecurityException) {
                 Timber.w(e, "Could not delete %s", file.fileName)
+                success = false
             }
         }
         // Remove the folder once nothing else is in it
         val folder = storageManager.getStorageLocation()?.findFile(download.path)
         if (folder != null && folder.isDirectory && folder.listFiles().isEmpty()) folder.delete()
+        return success
     }
 
     private companion object {

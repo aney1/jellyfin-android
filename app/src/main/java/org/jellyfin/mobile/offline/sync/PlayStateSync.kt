@@ -165,11 +165,12 @@ class PlayStateSync(
             positionTicks = userData.playbackPositionTicks,
             played = userData.played,
             lastPlayedAt = lastPlayed ?: lastPlayedAt,
-            // Keep the first time the item was seen as played; the auto delete also counts from the download
+            // When it was last watched: the auto delete counts from there
             playedAt = when {
                 !userData.played -> null
-                played && playedAt != null -> playedAt
-                else -> lastPlayed ?: System.currentTimeMillis()
+                lastPlayed != null && (playedAt == null || lastPlayed > playedAt) -> lastPlayed
+                playedAt != null -> playedAt
+                else -> System.currentTimeMillis()
             },
             dirty = false,
             updatedAt = maxOf(updatedAt + 1, lastPlayed ?: 0),
