@@ -233,7 +233,8 @@ private fun EntryRow(entry: OfflineViewModel.Entry, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
+        // Fixed width: the progress bar below fills the thumbnail, not the row
+        Box(modifier = Modifier.width(THUMBNAIL_WIDTH.dp)) {
             Thumbnail(model = entry.imageUri, placeholder = R.drawable.ic_local_movies_white_64)
             if (entry.progress != null) {
                 Box(
