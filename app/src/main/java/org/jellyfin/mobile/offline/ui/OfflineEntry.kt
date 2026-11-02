@@ -15,6 +15,8 @@ import org.jellyfin.sdk.api.client.extensions.systemApi
 import org.jellyfin.sdk.model.api.MediaType
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * Fork: offline. Decides what to show when the web app can't reach the server: the offline screen if there
@@ -28,6 +30,8 @@ object OfflineEntry : KoinComponent {
     private val localCopyResolver: LocalCopyResolver by inject()
     private val apiClients: OfflineApiClients by inject()
 
+    private val handling: MutableSet<Fragment> = Collections.newSetFromMap(WeakHashMap())
+
     /**
      * @param showConnectScreen upstream's handling, used when the offline screen isn't shown.
      */
@@ -36,19 +40,29 @@ object OfflineEntry : KoinComponent {
             showConnectScreen()
             return
         }
+        // The web view reports errors more than once (error callback and connection timeout), handle one at a time
+        if (!handling.add(fragment)) return
         fragment.lifecycleScope.launch {
-            // Some web app errors happen while the server is fine (e.g. missing credentials): keep upstream's handling
-            val offline = !isServerReachable() && hasOfflineContent()
-            val fragmentManager = fragment.parentFragmentManager
-            val canSwitch = fragment.isAdded &&
-                fragment.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
-                !fragmentManager.isStateSaved
-            when {
-                !offline -> showConnectScreen()
-                // Don't cover a video in full screen; the offline screen shows up on the next connection error
-                !canSwitch || OfflineNavigation.isFullscreenPlayerOpen(fragmentManager) -> Unit
-                else -> OfflineNavigation.swap<OfflineFragment>(fragment)
+            try {
+                handle(fragment, showConnectScreen)
+            } finally {
+                handling.remove(fragment)
             }
+        }
+    }
+
+    private suspend fun handle(fragment: Fragment, showConnectScreen: () -> Unit) {
+        // Some web app errors happen while the server is fine (e.g. missing credentials): keep upstream's handling
+        val offline = !isServerReachable() && hasOfflineContent()
+        // The fragment may have been replaced in the meantime
+        if (!fragment.isAdded) return
+        val fragmentManager = fragment.parentFragmentManager
+        val canSwitch = fragment.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !fragmentManager.isStateSaved
+        when {
+            !offline -> showConnectScreen()
+            // Don't cover a video in full screen; the offline screen shows up on the next connection error
+            !canSwitch || OfflineNavigation.isFullscreenPlayerOpen(fragmentManager) -> Unit
+            else -> OfflineNavigation.swap<OfflineFragment>(fragment)
         }
     }
 
