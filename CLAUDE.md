@@ -119,11 +119,39 @@ module.
 - **Jellyfin SDK** (`org.jellyfin.sdk`) is the API client; `ApiClientController` manages it.
 - HTTP via OkHttp + Cronet (embedded); images via Coil.
 
+### Offline playlists (fork-only, `offline/`)
+
+Plays downloaded copies instead of streaming, syncs their watch state, downloads playlists
+(off / semi / automatic, limits, per-video exclusions), deletes watched downloads after a set
+period, and shows an offline screen when the server can't be reached.
+
+- **Kept apart from upstream so upstream merges stay easy.** Own Room database `OfflineDatabase`
+  (`offline.db`, schema in `app/schemas/org.jellyfin.mobile.offline.data.OfflineDatabase`) — never
+  add tables to or bump upstream's `JellyfinDatabase`. Upstream entities/DAOs are not changed;
+  downloads are started/removed only through upstream's `DownloadManager` (or the activity's
+  `ActivityEvent.DownloadItems` for user actions). Strings live in `values/strings_offline.xml`.
+- **Hooks in upstream files** are small and marked `// Fork: offline`: `JellyfinApplication`
+  (module + `OfflineCoordinator.start()`), `QueueManager` (`startItem()` decides local vs. stream per
+  item, local subtitles, fallback to streaming), `PlayerViewModel` (report local playback, cached
+  autoplay/skip settings), `MediaSegmentRepository` (stored segments), `WebViewFragment` (JS bridge
+  `NativeOffline`, server error → offline screen), `SettingsFragment` (`offlineSettings()`),
+  `injectionScript.js` (loads `PlaylistDownloadInjector.js`), `app/build.gradle.kts` (JUnit platform).
+- **Watch state**: `OfflinePlayback` only records locally (dirty rows); `PlayStateSync` is the single
+  serialized sender (`updateItemUserData`) with a three-way conflict check against the last state
+  both sides agreed on. Local playback reports no playback sessions.
+- **Deleting**: everything goes through the guarded `OfflineDownloads.delete()`; rules are pure
+  functions in `OfflineRules` (unit tested). Auto delete only counts watching after the download.
+- **If upstream ships one of these features** (e.g. PR #2169, offline watch-state sync): take
+  upstream's version, drop the matching hook, and let pending fork rows flush before the update.
+- All SDK calls from fork code run on `Dispatchers.IO` (the SDK reads responses on the calling
+  thread). `subtitleApi.getSubtitle()` can't be used (expects JSON), subtitles are fetched raw.
+
 ## Conventions
 
-- Kotlin official code style; detekt runs with `buildUponDefaultConfig` and **`maxIssues: 0`** —
-  builds fail on any violation, so run `./gradlew detekt` before considering work done. Note
-  `detekt.yml`: trailing commas are required (call + declaration sites), `MaxLineLength` 200,
+- Kotlin official code style; detekt config is `detekt.yaml` (`buildUponDefaultConfig`). The build
+  sets `ignoreFailures = true` and upstream has ~120 pre-existing findings, so compare the report
+  against the base branch: new code must add none. The formatting rules wrap at **120** columns
+  (`.editorconfig`/`MaxLineLength` say 140); trailing commas are used at call and declaration sites;
   `@Composable` functions are exempt from `FunctionNaming`.
 - Jetpack Compose and view-binding (XML layouts) coexist; both `buildFeatures` are enabled. Setup
   screens (`ui/screens/`) use Compose; the player and web shell use XML/view-binding.
