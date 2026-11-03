@@ -9,12 +9,14 @@ Jellyfin Android (`org.jellyfin.mobile`) — a native Android wrapper around the
 `WebView` and provides native capabilities (video/audio playback, Chromecast, media session,
 downloads, Android Auto) that the web layer calls into via JavaScript bridges.
 
-> **This is a fork.** This branch (`feature/custom-on-2.7.3`) is based on upstream
+> **This is a fork.** This branch (`feature/offline-playlists`) is based on upstream
 > v2.7.3, which uses the **media3** player (`androidx.media3.*`), and carries the fork's
-> custom features ported from the older branch. It is the only published branch. An earlier
+> custom features plus the offline playlists. It is the fork's working branch; older
+> per-release branches (`feature/custom-on-2.7.x`) are gone. An earlier
 > v2.6.4 / ExoPlayer2 line is kept as the local-only tag `archive/media-segments-2.6.4`, because
 > the original media3 migration broke sidecar/external subtitles for this fork's use case — if
-> that regression reappears here, that tag is the reference.
+> that regression reappears here, that tag is the reference. Never push the `archive/*` tags:
+> they predate the naming scrub below.
 
 > **Private-by-convention naming.** Nothing committed here may name software the maintainer
 > self-hosts, so the in-app archive screen is called "Media Archive" and the home-tab playlist
@@ -150,7 +152,7 @@ period, and shows an offline screen when the server can't be reached.
 
 - Kotlin official code style; detekt config is `detekt.yaml` (`buildUponDefaultConfig`). The build
   sets `ignoreFailures = true` and upstream has ~120 pre-existing findings, so compare the report
-  against the base branch: new code must add none. The formatting rules wrap at **120** columns
+  against the upstream tag the fork is based on (`v2.7.3`): new code must add none. The formatting rules wrap at **120** columns
   (`.editorconfig`/`MaxLineLength` say 140); trailing commas are used at call and declaration sites;
   `@Composable` functions are exempt from `FunctionNaming`.
 - Jetpack Compose and view-binding (XML layouts) coexist; both `buildFeatures` are enabled. Setup
