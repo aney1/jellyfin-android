@@ -48,20 +48,29 @@ class OfflineQueueSupport(
      * @param mediaSourceId the version requested by the web app, a different version is streamed.
      * @param downloadsOnly playback was started from the offline screen, only downloads can be played.
      */
-    suspend fun localCopyFor(itemId: UUID, mediaSourceId: String?, downloadsOnly: Boolean): LocalCopyResolver.LocalCopy? {
+    @Suppress("ReturnCount")
+    suspend fun localCopyFor(
+        itemId: UUID,
+        mediaSourceId: String?,
+        downloadsOnly: Boolean,
+    ): LocalCopyResolver.LocalCopy? {
         if (downloadsOnly) return localCopyResolver.find(itemId)
         if (!preferences.preferDownloads) return null
 
         // Only a download of the server and user the web app is signed in to
-        val copy = localCopyResolver.find(itemId, appPreferences.currentServerId, appPreferences.currentUserId) ?: return null
+        val copy = localCopyResolver.find(
+            itemId = itemId,
+            serverId = appPreferences.currentServerId,
+            userId = appPreferences.currentUserId,
+        ) ?: return null
         val source = copy.download.item.mediaSources?.firstOrNull() ?: return null
-        if (mediaSourceId != null && mediaSourceId.toUUIDOrNull().let { it == null || it != source.id?.toUUIDOrNull() }) {
-            return null
-        }
+        val requestedVersion = mediaSourceId?.let { it.toUUIDOrNull() ?: return null }
+        if (requestedVersion != null && requestedVersion != source.id?.toUUIDOrNull()) return null
 
         // Until the external subtitles are stored, streaming keeps them available
         val hasExternalSubtitles = source.mediaStreams.orEmpty().any { it.isDownloadableExternalSubtitle }
-        if (hasExternalSubtitles && offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone != true) return null
+        val subtitlesStored = offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone == true
+        if (hasExternalSubtitles && !subtitlesStored) return null
         return copy
     }
 

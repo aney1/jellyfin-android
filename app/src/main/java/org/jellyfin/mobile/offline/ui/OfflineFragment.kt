@@ -66,7 +66,9 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
                 putParcelable(Constants.FRAGMENT_WEB_VIEW_EXTRA_SERVER, server)
             },
         )
-        if (!switched) Toast.makeText(requireContext(), R.string.offline_reconnect_after_player, Toast.LENGTH_SHORT).show()
+        if (!switched) {
+            Toast.makeText(requireContext(), R.string.offline_reconnect_after_player, Toast.LENGTH_SHORT).show()
+        }
     }
 
     override val canInterceptBackPress: Boolean

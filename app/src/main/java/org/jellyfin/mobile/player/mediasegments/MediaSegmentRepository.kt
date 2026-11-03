@@ -95,12 +95,13 @@ class MediaSegmentRepository : KoinComponent {
     }
 
     // Fork: offline - downloaded items use the segments stored with the download (no server round trip)
-    suspend fun getSegmentsForItem(item: BaseItemDto): List<MediaSegmentDto> = downloadExtras.cachedSegments(item.id) ?: runCatching {
-        withContext(Dispatchers.IO) {
-            mediaSegmentsApi.getItemSegments(
-                itemId = item.id,
-                includeSegmentTypes = SUPPORTED_TYPES,
-            ).content.items
-        }
-    }.getOrDefault(emptyList())
+    suspend fun getSegmentsForItem(item: BaseItemDto): List<MediaSegmentDto> = downloadExtras.cachedSegments(item.id)
+        ?: runCatching {
+            withContext(Dispatchers.IO) {
+                mediaSegmentsApi.getItemSegments(
+                    itemId = item.id,
+                    includeSegmentTypes = SUPPORTED_TYPES,
+                ).content.items
+            }
+        }.getOrDefault(emptyList())
 }

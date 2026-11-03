@@ -1,3 +1,6 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+@file:Suppress("TooGenericExceptionCaught")
+
 package org.jellyfin.mobile.offline.sync
 
 import android.content.Context
@@ -32,7 +35,8 @@ class OfflineSyncWorker(
         return try {
             val complete = maintenance.run(includePlaylists)
             // Retry one-off syncs that couldn't send everything; periodic work simply runs again later
-            if (complete || runAttemptCount >= MAX_RETRIES || tags.contains(TAG_PERIODIC)) Result.success() else Result.retry()
+            val done = complete || runAttemptCount >= MAX_RETRIES || tags.contains(TAG_PERIODIC)
+            if (done) Result.success() else Result.retry()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

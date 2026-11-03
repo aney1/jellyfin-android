@@ -6,6 +6,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.offline.playlist.OfflineRules
 import java.util.UUID
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
@@ -16,6 +17,13 @@ class OfflineRulesTest : FunSpec({
     fun video(itemId: UUID, minutes: Long = 10, played: Boolean = false, isVideo: Boolean = true) =
         OfflineRules.Entry(itemId, isVideo, minutes * minuteTicks, played)
 
+    fun wanted(
+        entries: List<OfflineRules.Entry>,
+        excluded: Set<UUID> = emptySet(),
+        maxItems: Int? = null,
+        maxMinutes: Int? = null,
+    ) = OfflineRules.wantedItems(entries, excluded, maxItems, maxMinutes)
+
     context("wantedItems") {
         val a = id()
         val b = id()
@@ -23,27 +31,26 @@ class OfflineRulesTest : FunSpec({
         val d = id()
 
         test("all unwatched videos in playlist order") {
-            OfflineRules.wantedItems(listOf(video(a), video(b, played = true), video(c)), emptySet(), null, null) shouldContainExactly
-                listOf(a, c)
+            wanted(listOf(video(a), video(b, played = true), video(c))) shouldContainExactly listOf(a, c)
         }
 
         test("excluded videos and other media types are skipped") {
-            OfflineRules.wantedItems(listOf(video(a), video(b, isVideo = false), video(c)), setOf(a), null, null) shouldContainExactly
-                listOf(c)
+            val entries = listOf(video(a), video(b, isVideo = false), video(c))
+            wanted(entries, excluded = setOf(a)) shouldContainExactly listOf(c)
         }
 
         test("at most maxItems, counted after skipping") {
-            OfflineRules.wantedItems(listOf(video(a, played = true), video(b), video(c), video(d)), emptySet(), 2, null) shouldContainExactly
-                listOf(b, c)
+            val entries = listOf(video(a, played = true), video(b), video(c), video(d))
+            wanted(entries, maxItems = 2) shouldContainExactly listOf(b, c)
         }
 
         test("videos longer than the runtime limit are skipped") {
-            OfflineRules.wantedItems(listOf(video(a, minutes = 5), video(b, minutes = 45)), emptySet(), null, 30) shouldContainExactly
-                listOf(a)
+            val entries = listOf(video(a, minutes = 5), video(b, minutes = 45))
+            wanted(entries, maxMinutes = 30) shouldContainExactly listOf(a)
         }
 
         test("an item twice in the playlist is downloaded once") {
-            OfflineRules.wantedItems(listOf(video(a), video(a)), emptySet(), null, null) shouldContainExactly listOf(a)
+            wanted(listOf(video(a), video(a))) shouldContainExactly listOf(a)
         }
     }
 
@@ -108,10 +115,19 @@ class OfflineRulesTest : FunSpec({
     context("expiredWatched") {
         val item = id()
         val now = 10 * day
-        fun state(played: Boolean = true, playedAt: Long? = now - 2 * day, dirty: Boolean = false, downloadedAt: Long = now - 5 * day) =
-            OfflineRules.WatchState(item, played, playedAt, dirty, downloadedAt)
-        fun expired(state: OfflineRules.WatchState, deleteAfter: kotlin.time.Duration? = 1.days, countFrom: Long = 0, inUse: UUID? = null) =
-            OfflineRules.expiredWatched(listOf(state), now, deleteAfter, countFrom, inUse)
+        fun state(
+            played: Boolean = true,
+            playedAt: Long? = now - 2 * day,
+            dirty: Boolean = false,
+            downloadedAt: Long = now - 5 * day,
+        ) = OfflineRules.WatchState(item, played, playedAt, dirty, downloadedAt)
+
+        fun expired(
+            state: OfflineRules.WatchState,
+            deleteAfter: Duration? = 1.days,
+            countFrom: Long = 0,
+            inUse: UUID? = null,
+        ) = OfflineRules.expiredWatched(listOf(state), now, deleteAfter, countFrom, inUse)
 
         test("deleted once the period after watching passed") {
             expired(state()) shouldBe setOf(item)

@@ -1,3 +1,6 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+@file:Suppress("TooGenericExceptionCaught")
+
 package org.jellyfin.mobile.offline.playlist
 
 import android.content.Context
@@ -55,7 +58,11 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
     fun onPlaylistShown(playlistId: String, name: String?) {
         launch(playlistId, name, create = false) { playlist ->
             name?.let { playlistSync.setName(playlist, it) }
-            playlistSync.sync(playlist, download = playlist.mode == PlaylistDownloadMode.AUTO, enqueuer = offlineDownloads.userEnqueuer)
+            playlistSync.sync(
+                playlist = playlist,
+                download = playlist.mode == PlaylistDownloadMode.AUTO,
+                enqueuer = offlineDownloads.userEnqueuer,
+            )
         }
     }
 
@@ -69,7 +76,10 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
         if (id == null || serverId == null) return@runBlocking "{}"
         val items = itemIds.split(',').mapNotNull { it.trim().toUUIDOrNull() }
         val playlist = offlineDao.getPlaylist(serverId, id)
-        val excluded = if (playlist != null) offlineDao.getExclusions(serverId, id).map { it.itemId }.toSet() else emptySet()
+        val excluded = when (playlist) {
+            null -> emptySet()
+            else -> offlineDao.getExclusions(serverId, id).map { it.itemId }.toSet()
+        }
         val downloads = offlineDownloads.downloadsOf(serverId, items)
 
         buildJsonObject {
@@ -150,7 +160,11 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
                 launchAction(playlistId, name) { stored ->
                     playlistSync.setMode(stored, mode)
                     // Semi-automatic only downloads on request, the mode change itself only refreshes
-                    playlistSync.sync(stored.copy(mode = mode), download = mode == PlaylistDownloadMode.AUTO, enqueuer = offlineDownloads.userEnqueuer)
+                    playlistSync.sync(
+                        playlist = stored.copy(mode = mode),
+                        download = mode == PlaylistDownloadMode.AUTO,
+                        enqueuer = offlineDownloads.userEnqueuer,
+                    )
                 }
             }
             .setNeutralButton(R.string.offline_limits) { _, _ -> showLimitsDialog(playlistId, name, playlist) }
@@ -203,7 +217,13 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
         setText(value?.toString().orEmpty())
     }
 
-    private suspend fun showItemDialog(playlistId: UUID, name: String?, itemId: UUID, itemName: String?, serverId: Long) {
+    private suspend fun showItemDialog(
+        playlistId: UUID,
+        name: String?,
+        itemId: UUID,
+        itemName: String?,
+        serverId: Long,
+    ) {
         val context = fragment.context ?: return
         val playlist = playlistSync.getPlaylist(serverId, playlistId)
         val download = offlineDownloads.downloadsOf(serverId, listOf(itemId))[itemId]
@@ -213,7 +233,9 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
 
         val actions = buildList {
             if (download == null || download.status == DownloadStatus.ERROR) add(R.string.offline_action_download)
-            if (download != null) add(if (autoDownloads) R.string.offline_action_delete_exclude else R.string.offline_action_delete)
+            if (download != null) {
+                add(if (autoDownloads) R.string.offline_action_delete_exclude else R.string.offline_action_delete)
+            }
             if (!excluded) add(R.string.offline_action_exclude) else add(R.string.offline_action_include)
         }
         AlertDialog.Builder(context)
@@ -221,8 +243,10 @@ class OfflineBridge(private val fragment: Fragment) : KoinComponent {
             .setItems(actions.map(context::getString).toTypedArray()) { _, which ->
                 launchAction(playlistId, name) { stored ->
                     when (actions[which]) {
-                        R.string.offline_action_download -> playlistSync.downloadItem(stored, itemId, offlineDownloads.userEnqueuer)
-                        R.string.offline_action_delete, R.string.offline_action_delete_exclude -> playlistSync.deleteDownload(stored, itemId)
+                        R.string.offline_action_download ->
+                            playlistSync.downloadItem(stored, itemId, offlineDownloads.userEnqueuer)
+                        R.string.offline_action_delete, R.string.offline_action_delete_exclude ->
+                            playlistSync.deleteDownload(stored, itemId)
                         R.string.offline_action_exclude -> playlistSync.setExcluded(stored, itemId, excluded = true)
                         R.string.offline_action_include -> playlistSync.setExcluded(stored, itemId, excluded = false)
                     }

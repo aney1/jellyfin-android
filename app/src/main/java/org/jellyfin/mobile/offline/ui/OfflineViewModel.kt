@@ -89,7 +89,8 @@ class OfflineViewModel(
                     name = playlist.name,
                     entries = entriesByPlaylist[playlist.playlistId].orEmpty().mapIndexed { index, entry ->
                         val copy = copies[entry.itemId]
-                        toEntry(index, copy?.download?.item ?: entry.item, copy, states[StateKey(playlist.serverId, playlist.userId, entry.itemId)])
+                        val state = states[StateKey(playlist.serverId, playlist.userId, entry.itemId)]
+                        toEntry(index, copy?.download?.item ?: entry.item, copy, state)
                     },
                 )
             }
@@ -102,7 +103,8 @@ class OfflineViewModel(
             .sortedByDescending { it.download.createdAt }
             .mapIndexed { index, copy ->
                 val download = copy.download
-                toEntry(index, download.item, copy, states[StateKey(download.serverId, download.userId, download.itemId)])
+                val state = states[StateKey(download.serverId, download.userId, download.itemId)]
+                toEntry(index, download.item, copy, state)
             }
 
         State(loading = false, playlists = offlinePlaylists, videos = videos)
@@ -159,7 +161,12 @@ class OfflineViewModel(
 
     fun changeServer() = activityEventHandler.emit(ActivityEvent.SelectServer)
 
-    private fun toEntry(position: Int, item: BaseItemDto, copy: LocalCopyResolver.LocalCopy?, state: PlayStateEntity?): Entry {
+    private fun toEntry(
+        position: Int,
+        item: BaseItemDto,
+        copy: LocalCopyResolver.LocalCopy?,
+        state: PlayStateEntity?,
+    ): Entry {
         val played = state?.played ?: item.userData?.played ?: false
         val positionTicks = state?.positionTicks ?: item.userData?.playbackPositionTicks ?: 0
         val runTime = item.runTimeTicks
@@ -172,7 +179,7 @@ class OfflineViewModel(
             imageUri = copy?.primaryImageUri,
             available = copy != null,
             played = played,
-            progress = if (!played && positionTicks > 0 && runTime != null && runTime > 0) positionTicks.toFloat() / runTime else null,
+            progress = runTime?.takeIf { !played && positionTicks > 0 && it > 0 }?.let { positionTicks.toFloat() / it },
             positionTicks = positionTicks,
         )
     }

@@ -1,3 +1,7 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+// Loops skip items that need nothing or failed with `continue`.
+@file:Suppress("TooGenericExceptionCaught", "LoopWithTooManyJumpStatements")
+
 package org.jellyfin.mobile.offline.playlist
 
 import kotlinx.coroutines.CancellationException
@@ -56,15 +60,28 @@ class PlaylistSync(
         suspend fun enqueue(serverId: Long, userId: Long, itemIds: List<UUID>)
     }
 
-    suspend fun getPlaylist(serverId: Long, playlistId: UUID): PlaylistEntity? = offlineDao.getPlaylist(serverId, playlistId)
+    suspend fun getPlaylist(serverId: Long, playlistId: UUID): PlaylistEntity? =
+        offlineDao.getPlaylist(serverId, playlistId)
 
     /**
      * Start tracking a playlist; only done for an explicit action of the user (mode, limits, single download).
      */
-    suspend fun getOrCreatePlaylist(serverId: Long, userId: Long, playlistId: UUID, name: String?): PlaylistEntity? = withContext(Dispatchers.IO) {
+    suspend fun getOrCreatePlaylist(
+        serverId: Long,
+        userId: Long,
+        playlistId: UUID,
+        name: String?,
+    ): PlaylistEntity? = withContext(Dispatchers.IO) {
         offlineDao.getPlaylist(serverId, playlistId)?.let { return@withContext it }
         val playlistName = name?.takeIf { it.isNotBlank() } ?: fetchName(serverId, userId, playlistId)
-        offlineDao.upsertPlaylist(PlaylistEntity(serverId = serverId, userId = userId, playlistId = playlistId, name = playlistName.orEmpty()))
+        offlineDao.upsertPlaylist(
+            PlaylistEntity(
+                serverId = serverId,
+                userId = userId,
+                playlistId = playlistId,
+                name = playlistName.orEmpty(),
+            ),
+        )
         offlineDao.getPlaylist(serverId, playlistId)
     }
 
@@ -75,7 +92,9 @@ class PlaylistSync(
         offlineDao.updatePlaylistLimits(playlist.serverId, playlist.playlistId, maxItems, maxRuntimeMinutes)
 
     suspend fun setName(playlist: PlaylistEntity, name: String) {
-        if (name.isNotBlank() && name != playlist.name) offlineDao.updatePlaylistName(playlist.serverId, playlist.playlistId, name)
+        if (name.isNotBlank() && name != playlist.name) {
+            offlineDao.updatePlaylistName(playlist.serverId, playlist.playlistId, name)
+        }
     }
 
     /**
@@ -91,7 +110,9 @@ class PlaylistSync(
     }
 
     /** Server requests must not run on the main thread (the SDK reads responses on the calling thread). */
-    private suspend fun <T> locked(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
+    private suspend fun <T> locked(block: suspend () -> T): T = withContext(Dispatchers.IO) {
+        mutex.withLock { block() }
+    }
 
     /**
      * Background pass: automatic playlists download new videos, and every playlist with downloads is refreshed
@@ -104,7 +125,8 @@ class PlaylistSync(
         val refreshed = mutableSetOf<UUID>()
         for (playlist in offlineDao.getPlaylists()) {
             val auto = playlist.mode == PlaylistDownloadMode.AUTO
-            val hasDownloads = playlist.playlistId in origins || memberships[playlist.playlistId].orEmpty().any { it in downloaded }
+            val hasDownloads = playlist.playlistId in origins ||
+                memberships[playlist.playlistId].orEmpty().any { it in downloaded }
             if (!auto && !hasDownloads) continue
             try {
                 val entries = refreshSnapshot(playlist) ?: continue
@@ -125,11 +147,15 @@ class PlaylistSync(
      */
     suspend fun downloadItem(playlist: PlaylistEntity, itemId: UUID, enqueuer: Enqueuer) = locked {
         offlineDao.deleteExclusion(playlist.serverId, playlist.playlistId, itemId)
-        val entries = offlineDao.getPlaylistEntryIds(playlist.serverId, playlist.playlistId).takeIf { playlist.lastSyncedAt != null }
-            ?: refreshSnapshot(playlist)?.map { it.itemId }
+        val entries = when (playlist.lastSyncedAt) {
+            null -> refreshSnapshot(playlist)?.map { it.itemId }
+            else -> offlineDao.getPlaylistEntryIds(playlist.serverId, playlist.playlistId)
+        }
         // Only tie the download to the playlist when the stored playlist contains it, otherwise it's a plain download
         if (entries != null && itemId in entries) {
-            offlineDao.insertDownloadOrigins(listOf(DownloadOriginEntity(playlist.serverId, itemId, playlist.playlistId)))
+            offlineDao.insertDownloadOrigins(
+                listOf(DownloadOriginEntity(playlist.serverId, itemId, playlist.playlistId)),
+            )
         }
         recentlyRequested[itemId] = System.currentTimeMillis()
         enqueuer.enqueue(playlist.serverId, playlist.userId, listOf(itemId))
@@ -204,11 +230,16 @@ class PlaylistSync(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Timber.i(e, "Could not fetch the playlist name")
             null
         }
     }
 
-    private suspend fun downloadWanted(playlist: PlaylistEntity, entries: List<PlaylistEntryEntity>, enqueuer: Enqueuer): Int {
+    private suspend fun downloadWanted(
+        playlist: PlaylistEntity,
+        entries: List<PlaylistEntryEntity>,
+        enqueuer: Enqueuer,
+    ): Int {
         // Read the settings again, they may have changed while the playlist was refreshed
         val current = offlineDao.getPlaylist(playlist.serverId, playlist.playlistId) ?: return 0
         val excluded = offlineDao.getExclusions(playlist.serverId, playlist.playlistId).map { it.itemId }.toSet()
@@ -234,7 +265,9 @@ class PlaylistSync(
         }
         if (missing.isEmpty()) return 0
 
-        offlineDao.insertDownloadOrigins(missing.map { DownloadOriginEntity(playlist.serverId, it, playlist.playlistId) })
+        offlineDao.insertDownloadOrigins(
+            missing.map { DownloadOriginEntity(playlist.serverId, it, playlist.playlistId) },
+        )
         missing.forEach { recentlyRequested[it] = now }
         enqueuer.enqueue(playlist.serverId, playlist.userId, missing)
         Timber.i("Started %d downloads for playlist %s", missing.size, playlist.playlistId)
@@ -252,18 +285,11 @@ class PlaylistSync(
         if (origins.isEmpty()) return
         val now = System.currentTimeMillis()
         val playlists = offlineDao.getPlaylists()
-        val memberships = offlineDao.getAllPlaylistMemberships().groupBy({ it.playlistId }, { it.itemId }).mapValues { it.value.toSet() }
+        val memberships = offlineDao.getAllPlaylistMemberships()
+            .groupBy({ it.playlistId }, { it.itemId })
+            .mapValues { it.value.toSet() }
 
-        // Track since when each origin's item is missing from its (just refreshed) playlist
-        val updatedOrigins = origins.map { origin ->
-            if (origin.playlistId !in refreshed) return@map origin
-            val present = memberships[origin.playlistId].orEmpty().contains(origin.itemId)
-            val missingSince = if (present) null else origin.missingSince ?: now
-            if (missingSince != origin.missingSince) {
-                offlineDao.setOriginMissingSince(origin.serverId, origin.itemId, origin.playlistId, missingSince)
-            }
-            origin.copy(missingSince = missingSince)
-        }
+        val updatedOrigins = updateMissingSince(origins, refreshed, memberships, now)
 
         val knownSnapshots = playlists
             .filter { it.lastSyncedAt != null }
@@ -272,29 +298,57 @@ class PlaylistSync(
 
         for ((serverId, serverOrigins) in updatedOrigins.groupBy { it.serverId }) {
             val byItem = serverOrigins.groupBy({ it.itemId }, { OfflineRules.Origin(it.playlistId, it.missingSince) })
-            val candidates = OfflineRules.leftPlaylists(byItem, knownSnapshots, now, REMOVAL_GRACE, offlinePlayback.itemInUse)
-            if (candidates.isEmpty()) continue
+            val candidates = OfflineRules.leftPlaylists(
+                origins = byItem,
+                knownSnapshots = knownSnapshots,
+                now = now,
+                grace = REMOVAL_GRACE,
+                itemInUse = offlinePlayback.itemInUse,
+            )
 
-            // Only delete what is unwatched according to the server right now; if it can't be asked, keep everything
-            val userId = serverOrigins.firstNotNullOfOrNull { userOfPlaylist[it.playlistId] } ?: continue
+            val userId = serverOrigins.firstNotNullOfOrNull { userOfPlaylist[it.playlistId] }
+            if (candidates.isNotEmpty() && userId != null) removeUnwatched(serverId, userId, candidates)
+        }
+    }
+
+    /**
+     * Track since when each origin's item is missing from its (just refreshed) playlist.
+     */
+    private suspend fun updateMissingSince(
+        origins: List<DownloadOriginEntity>,
+        refreshed: Set<UUID>,
+        memberships: Map<UUID, Set<UUID>>,
+        now: Long,
+    ): List<DownloadOriginEntity> = origins.map { origin ->
+        if (origin.playlistId !in refreshed) return@map origin
+        val present = memberships[origin.playlistId].orEmpty().contains(origin.itemId)
+        val missingSince = if (present) null else origin.missingSince ?: now
+        if (missingSince != origin.missingSince) {
+            offlineDao.setOriginMissingSince(origin.serverId, origin.itemId, origin.playlistId, missingSince)
+        }
+        origin.copy(missingSince = missingSince)
+    }
+
+    /**
+     * Delete the [candidates] that are unwatched according to the server right now; if it can't be asked, keep all.
+     */
+    private suspend fun removeUnwatched(serverId: Long, userId: Long, candidates: Set<UUID>) {
+        try {
+            playStateSync.refresh(serverId, userId, candidates)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.i(e, "Could not check watch state before removing downloads")
+            return
+        }
+        for (itemId in candidates.filterNot { offlineDao.isPlayedByAnyUser(serverId, it) }) {
             try {
-                playStateSync.refresh(serverId, userId, candidates)
+                val deleted = offlineDownloads.delete(serverId, itemId) { offlinePlayback.itemInUse != itemId }
+                if (deleted) Timber.i("Removed download %s, it left its playlist unwatched", itemId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.i("Could not check watch state before removing downloads: %s", e.message)
-                continue
-            }
-            for (itemId in candidates) {
-                if (offlineDao.isPlayedByAnyUser(serverId, itemId)) continue
-                try {
-                    val deleted = offlineDownloads.delete(serverId, itemId) { offlinePlayback.itemInUse != itemId }
-                    if (deleted) Timber.i("Removed download %s, it left its playlist unwatched", itemId)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.e(e, "Could not remove download %s", itemId)
-                }
+                Timber.e(e, "Could not remove download %s", itemId)
             }
         }
     }

@@ -111,7 +111,11 @@ class QueueManager(
         )
         // From the offline screen, continue with the next playable download; upstream ignores streaming errors here
         while (downloadsOnlyQueue && error != null && hasNext()) {
-            error = startItem(itemId = currentQueue[++currentQueueIndex], mediaSourceId = null, resumeFromSavedPosition = true)
+            error = startItem(
+                itemId = currentQueue[++currentQueueIndex],
+                mediaSourceId = null,
+                resumeFromSavedPosition = true,
+            )
         }
 
         return error.takeIf { downloadsOnlyQueue }
@@ -163,6 +167,7 @@ class QueueManager(
         ).also { error -> if (error == null) offlineQueue.itemInUse = null }
     }
 
+    @Suppress("LongParameterList") // Fork: offline - two parameters added
     private suspend fun startDownloadPlayback(
         itemId: UUID,
         startTime: Duration? = null,
@@ -199,8 +204,12 @@ class QueueManager(
         )
         resolvedStartTime?.let { duration -> mediaSource.startTime = duration }
         // Fork: offline - these are MediaStream indexes (subtitle -1 = off), not list positions
-        audioStreamIndex?.let { index -> mediaSource.audioStreams.find { it.index == index }?.let(mediaSource::selectAudioStream) }
-        subtitleStreamIndex?.let { index -> mediaSource.selectSubtitleStream(mediaSource.subtitleStreams.find { it.index == index }) }
+        audioStreamIndex?.let { index ->
+            mediaSource.audioStreams.find { it.index == index }?.let(mediaSource::selectAudioStream)
+        }
+        subtitleStreamIndex?.let { index ->
+            mediaSource.selectSubtitleStream(mediaSource.subtitleStreams.find { it.index == index })
+        }
 
         _currentMediaSource.value = mediaSource
 
@@ -351,17 +360,17 @@ class QueueManager(
 
         val currentPlayState = viewModel.getStateAndPause() ?: return false
 
-        return (
-            startRemotePlayback(
-                itemId = currentMediaSource.itemId,
-                mediaSourceId = currentMediaSource.id,
-                maxStreamingBitrate = bitrate,
-                startTime = currentPlayState.position,
-                audioStreamIndex = currentMediaSource.selectedAudioStreamIndex,
-                subtitleStreamIndex = currentMediaSource.selectedSubtitleStreamIndex,
-                playWhenReady = currentPlayState.playWhenReady,
-            ) == null
-        ).also { success -> if (success) queueMaxStreamingBitrate = bitrate } // Fork: offline
+        val success = startRemotePlayback(
+            itemId = currentMediaSource.itemId,
+            mediaSourceId = currentMediaSource.id,
+            maxStreamingBitrate = bitrate,
+            startTime = currentPlayState.position,
+            audioStreamIndex = currentMediaSource.selectedAudioStreamIndex,
+            subtitleStreamIndex = currentMediaSource.selectedSubtitleStreamIndex,
+            playWhenReady = currentPlayState.playWhenReady,
+        ) == null
+        if (success) queueMaxStreamingBitrate = bitrate // Fork: offline
+        return success
     }
 
     fun hasPrevious(): Boolean = currentQueue.isNotEmpty() && currentQueueIndex > 0
@@ -418,7 +427,8 @@ class QueueManager(
     @CheckResult
     private fun prepareStreams(source: LocalJellyfinMediaSource): MediaSource {
         // Fork: offline - add the downloaded external subtitles
-        return createDownloadVideoMediaSource(source.id, source.remoteFileUri, offlineQueue.getSubtitleConfigurations(source.itemId))
+        val subtitles = offlineQueue.getSubtitleConfigurations(source.itemId)
+        return createDownloadVideoMediaSource(source.id, source.remoteFileUri, subtitles)
     }
 
     private fun prepareStreams(source: RemoteJellyfinMediaSource): MediaSource {

@@ -38,10 +38,12 @@ abstract class OfflineDatabase : RoomDatabase() {
         fun toUuid(value: String?): UUID? = value?.toUUIDOrNull()
 
         @TypeConverter
-        fun fromBaseItemDto(baseItem: BaseItemDto?): String? = baseItem?.let { OfflineJson.encodeToString(BaseItemDto.serializer(), it) }
+        fun fromBaseItemDto(baseItem: BaseItemDto?): String? =
+            baseItem?.let { OfflineJson.encodeToString(BaseItemDto.serializer(), it) }
 
         @TypeConverter
-        fun toBaseItemDto(json: String?): BaseItemDto? = json?.let { OfflineJson.decodeFromString(BaseItemDto.serializer(), it) }
+        fun toBaseItemDto(json: String?): BaseItemDto? =
+            json?.let { OfflineJson.decodeFromString(BaseItemDto.serializer(), it) }
 
         @TypeConverter
         fun fromUri(uri: Uri?): String? = uri?.toString()

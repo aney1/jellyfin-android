@@ -71,7 +71,10 @@ class OfflineDownloads(
      * Downloads of [itemIds] on [serverId] (any server if null), queried in chunks (SQLite limits the number of
      * query parameters).
      */
-    suspend fun downloadsOf(serverId: Long?, itemIds: Collection<UUID>): Map<UUID, DownloadEntity> = withContext(Dispatchers.IO) {
+    suspend fun downloadsOf(
+        serverId: Long?,
+        itemIds: Collection<UUID>,
+    ): Map<UUID, DownloadEntity> = withContext(Dispatchers.IO) {
         itemIds.distinct()
             .chunked(QUERY_CHUNK)
             .flatMap { chunk -> downloadDao.getDownloadsByItemIds(chunk) }
@@ -90,7 +93,11 @@ class OfflineDownloads(
      *
      * @return true if the download is gone.
      */
-    suspend fun delete(serverId: Long, itemId: UUID, stillWanted: (DownloadEntity) -> Boolean = { true }): Boolean = mutex.withLock {
+    suspend fun delete(
+        serverId: Long,
+        itemId: UUID,
+        stillWanted: (DownloadEntity) -> Boolean = { true },
+    ): Boolean = mutex.withLock {
         val download = downloadsOf(serverId, listOf(itemId))[itemId]
         if (download != null) {
             if (!stillWanted(download)) return@withLock false

@@ -27,10 +27,12 @@ class OfflineApiClients(
         val serverUser = userDao.getServerUser(serverId, userId) ?: return@withContext null
         val accessToken = serverUser.user.accessToken ?: return@withContext null
         val key = Key(serverId, userId, serverUser.server.hostname, accessToken)
-        clients[key] ?: Target(apiClientController.getApiClient(serverId, userId), serverUser.user.userId).also { target ->
+        clients[key] ?: run {
+            val target = Target(apiClientController.getApiClient(serverId, userId), serverUser.user.userId)
             // Drop clients with an outdated token or address of the same user
             clients.keys.removeAll { it.serverId == serverId && it.userId == userId }
             clients[key] = target
+            target
         }
     }
 }

@@ -57,7 +57,8 @@ object OfflineEntry : KoinComponent {
         // The fragment may have been replaced in the meantime
         if (!fragment.isAdded) return
         val fragmentManager = fragment.parentFragmentManager
-        val canSwitch = fragment.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !fragmentManager.isStateSaved
+        val canSwitch = fragment.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            !fragmentManager.isStateSaved
         when {
             !offline -> showConnectScreen()
             !canSwitch -> Unit

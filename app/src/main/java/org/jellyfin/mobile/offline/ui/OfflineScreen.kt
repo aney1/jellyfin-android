@@ -20,9 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.ContentAlpha
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
-import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
@@ -61,7 +61,7 @@ import kotlin.time.Duration
 /**
  * Fork: offline. Lists look like the web app's list view: thumbnail, title, details, watch progress.
  */
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun OfflineScreen(
     state: OfflineViewModel.State,
@@ -95,7 +95,11 @@ fun OfflineScreen(
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
                         }
                     } else {
-                        Icon(Icons.Outlined.CloudOff, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                        Icon(
+                            Icons.Outlined.CloudOff,
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 16.dp),
+                        )
                     }
                 },
                 actions = {
@@ -148,7 +152,11 @@ private fun ReachableBanner(onReconnect: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(stringResource(R.string.offline_server_reachable), modifier = Modifier.weight(1f))
-        Text(stringResource(R.string.offline_reconnect), color = MaterialTheme.colors.primary, fontWeight = FontWeight.Bold)
+        Text(
+            text = stringResource(R.string.offline_reconnect),
+            color = MaterialTheme.colors.primary,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -160,7 +168,10 @@ private fun Overview(
 ) {
     if (state.playlists.isEmpty() && state.videos.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.offline_empty), color = MaterialTheme.colors.onBackground.copy(alpha = ContentAlpha.medium))
+            Text(
+                text = stringResource(R.string.offline_empty),
+                color = MaterialTheme.colors.onBackground.copy(alpha = ContentAlpha.medium),
+            )
         }
         return
     }
@@ -200,7 +211,12 @@ private fun PlaylistRow(playlist: OfflineViewModel.Playlist, onClick: () -> Unit
     ) {
         Thumbnail(model = playlist.imageUri, placeholder = R.drawable.ic_local_movies_white_64)
         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-            Text(playlist.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.subtitle1)
+            Text(
+                text = playlist.name,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.subtitle1,
+            )
             Text(
                 text = stringResource(R.string.offline_playlist_count, playlist.availableCount, playlist.entries.size),
                 style = MaterialTheme.typography.body2,
@@ -223,6 +239,7 @@ private fun EntryList(
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun EntryRow(entry: OfflineViewModel.Entry, onClick: () -> Unit) {
     Row(
@@ -271,7 +288,12 @@ private fun EntryRow(entry: OfflineViewModel.Entry, onClick: () -> Unit) {
             modifier = Modifier.padding(start = 12.dp).weight(1f),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.subtitle1)
+            Text(
+                text = entry.title,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.subtitle1,
+            )
             val details = listOfNotNull(
                 entry.subtitle,
                 entry.runTimeTicks?.ticks?.let(::formatRuntime),
@@ -313,7 +335,10 @@ private fun Thumbnail(model: Any?, placeholder: Int) {
 
 private fun formatRuntime(duration: Duration): String {
     val minutes = duration.inWholeMinutes
-    return if (minutes >= MINUTES_PER_HOUR) "${minutes / MINUTES_PER_HOUR}h ${minutes % MINUTES_PER_HOUR}m" else "${maxOf(minutes, 1)} min"
+    return when {
+        minutes >= MINUTES_PER_HOUR -> "${minutes / MINUTES_PER_HOUR}h ${minutes % MINUTES_PER_HOUR}m"
+        else -> "${maxOf(minutes, 1)} min"
+    }
 }
 
 private const val DISABLED_ALPHA = 0.38f

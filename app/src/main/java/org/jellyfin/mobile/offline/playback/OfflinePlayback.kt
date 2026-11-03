@@ -1,3 +1,6 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+@file:Suppress("TooGenericExceptionCaught")
+
 package org.jellyfin.mobile.offline.playback
 
 import kotlinx.coroutines.CoroutineScope
@@ -102,7 +105,10 @@ class OfflinePlayback(
         }
     }
 
-    private fun record(source: LocalJellyfinMediaSource, block: suspend (owner: Pair<Long, Long>, old: PlayStateEntity?) -> Unit) {
+    private fun record(
+        source: LocalJellyfinMediaSource,
+        block: suspend (owner: Pair<Long, Long>, old: PlayStateEntity?) -> Unit,
+    ) {
         localEvents.trySend {
             val owner = owner(source) ?: return@trySend
             block(owner, offlineDao.getPlayState(owner.first, owner.second, source.itemId))

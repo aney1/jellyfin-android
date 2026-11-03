@@ -1,3 +1,6 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+@file:Suppress("TooGenericExceptionCaught")
+
 package org.jellyfin.mobile.offline.sync
 
 import kotlinx.coroutines.CancellationException
@@ -109,7 +112,9 @@ class OfflineMaintenance(
         }
     }
 
-    private suspend fun loadDownloads(): List<DownloadEntity> = withContext(Dispatchers.IO) { downloadDao.getAllDownloads().first() }
+    private suspend fun loadDownloads(): List<DownloadEntity> = withContext(Dispatchers.IO) {
+        downloadDao.getAllDownloads().first()
+    }
 
     private suspend fun deleteExpired(downloads: List<DownloadEntity>, refreshedOwners: Set<Pair<Long, Long>>) {
         val deleteAfter = preferences.deleteWatchedAfter ?: return

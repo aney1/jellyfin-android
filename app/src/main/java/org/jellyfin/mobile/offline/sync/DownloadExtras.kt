@@ -1,3 +1,7 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+// Loops skip items that need nothing or failed with `continue`.
+@file:Suppress("TooGenericExceptionCaught", "LoopWithTooManyJumpStatements")
+
 package org.jellyfin.mobile.offline.sync
 
 import android.content.Context
@@ -56,9 +60,7 @@ class DownloadExtras(
         for (download in downloads) {
             if (download.status != DownloadStatus.DOWNLOADED) continue
             val cache = offlineDao.getItemCache(download.serverId, download.itemId)
-            val segmentsStale = cache?.segments.let { it == null || it == EMPTY_LIST } &&
-                now - (cache?.fetchedAt ?: 0) > SEGMENT_REFRESH_MS
-            if (cache != null && cache.item != null && cache.subtitlesDone && !segmentsStale) continue
+            if (cache != null && cache.isComplete(now)) continue
             try {
                 complete = fetch(download, cache) && complete
             } catch (e: CancellationException) {
@@ -72,12 +74,22 @@ class DownloadExtras(
     }
 
     /**
+     * Everything fetched, and media segments aren't due for a refresh (the server may detect them after the download).
+     */
+    private fun ItemCacheEntity.isComplete(now: Long): Boolean {
+        val segmentsStale = (segments == null || segments == EMPTY_LIST) && now - fetchedAt > SEGMENT_REFRESH_MS
+        return item != null && subtitlesDone && !segmentsStale
+    }
+
+    /**
      * @return true if everything was fetched.
      */
     private suspend fun fetch(download: DownloadEntity, cache: ItemCacheEntity?): Boolean {
         val target = apiClients.get(download.serverId, download.userId) ?: return false
         // Each part on its own: one failing must not block the others
-        val item = runApi { target.api.userLibraryApi.getItem(itemId = download.itemId, userId = target.userId).content }
+        val item = runApi {
+            target.api.userLibraryApi.getItem(itemId = download.itemId, userId = target.userId).content
+        }
         val segments = runApi {
             target.api.mediaSegmentsApi.getItemSegments(
                 itemId = download.itemId,

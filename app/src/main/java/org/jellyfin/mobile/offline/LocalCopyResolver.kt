@@ -8,9 +8,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
+import org.jellyfin.mobile.data.entity.DownloadFileEntity
 import org.jellyfin.mobile.data.entity.DownloadFiles
 import org.jellyfin.mobile.downloads.DownloadFileType
 import org.jellyfin.mobile.downloads.DownloadStatus
+import timber.log.Timber
 import java.util.UUID
 
 /**
@@ -32,7 +34,11 @@ class LocalCopyResolver(
      * @param serverId only accept a download of this server, null for any server.
      * @param userId only accept a download of this user, null for any user.
      */
-    suspend fun find(itemId: UUID, serverId: Long? = null, userId: Long? = null): LocalCopy? = withContext(Dispatchers.IO) {
+    suspend fun find(
+        itemId: UUID,
+        serverId: Long? = null,
+        userId: Long? = null,
+    ): LocalCopy? = withContext(Dispatchers.IO) {
         val candidates = downloadDao.getDownloadsByItemIds(listOf(itemId)).filter { download ->
             download.status == DownloadStatus.DOWNLOADED &&
                 (serverId == null || download.serverId == serverId) &&
@@ -55,19 +61,21 @@ class LocalCopyResolver(
     }
 
     private fun toLocalCopy(downloadFiles: DownloadFiles): LocalCopy? {
-        val mainFile = downloadFiles.files.find { it.type == DownloadFileType.ITEM && it.status == DownloadStatus.DOWNLOADED }
-            ?: return null
+        val mainFile = downloadFiles.files.find { it.isDownloaded(DownloadFileType.ITEM) } ?: return null
         if (!exists(mainFile.uri, mainFile.size)) return null
-        val image = downloadFiles.files.find { it.type == DownloadFileType.IMAGE_PRIMARY && it.status == DownloadStatus.DOWNLOADED }
+        val image = downloadFiles.files.find { it.isDownloaded(DownloadFileType.IMAGE_PRIMARY) }
         return LocalCopy(downloadFiles.download, mainFile.uri, image?.uri)
     }
+
+    private fun DownloadFileEntity.isDownloaded(fileType: DownloadFileType) =
+        type == fileType && status == DownloadStatus.DOWNLOADED
 
     private fun exists(uri: Uri, expectedSize: Long): Boolean = try {
         val file = DocumentFile.fromSingleUri(context, uri)
         // Same check as upstream's StorageManager.verify: present and complete
         file != null && file.exists() && (expectedSize <= 0 || file.length() == expectedSize)
     } catch (e: SecurityException) {
-        // Storage location permission was revoked
+        Timber.w(e, "No access to the download folder anymore")
         false
     }
 }

@@ -34,7 +34,8 @@ class OfflinePreferences(context: Context) {
      */
     val deleteWatchedAfter: Duration?
         get() {
-            val days = sharedPreferences.getString(PREF_DELETE_WATCHED_AFTER, null)?.toIntOrNull() ?: DEFAULT_DELETE_WATCHED_AFTER_DAYS
+            val days = sharedPreferences.getString(PREF_DELETE_WATCHED_AFTER, null)?.toIntOrNull()
+                ?: DEFAULT_DELETE_WATCHED_AFTER_DAYS
             return if (days < 0) null else days.days
         }
 
@@ -64,7 +65,10 @@ class OfflinePreferences(context: Context) {
             entry.split('=', limit = 2).takeIf { it.size == 2 }?.let { (key, value) -> key to value }
         }.toMap()
         set(value) = sharedPreferences.edit()
-            .putStringSet(PREF_CACHED_CUSTOM_PREFS, value.mapNotNull { (key, value) -> value?.let { "$key=$it" } }.toSet())
+            .putStringSet(
+                PREF_CACHED_CUSTOM_PREFS,
+                value.mapNotNull { (key, value) -> value?.let { "$key=$it" } }.toSet(),
+            )
             .apply()
 
     companion object {

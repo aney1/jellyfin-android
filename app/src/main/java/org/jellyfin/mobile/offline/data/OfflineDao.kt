@@ -88,7 +88,10 @@ interface OfflineDao {
     @Query("SELECT * FROM download_origin WHERE server_id = :serverId AND item_id = :itemId")
     suspend fun getDownloadOriginsOfItem(serverId: Long, itemId: UUID): List<DownloadOriginEntity>
 
-    @Query("DELETE FROM download_origin WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId")
+    @Query(
+        "DELETE FROM download_origin " +
+            "WHERE server_id = :serverId AND item_id = :itemId AND playlist_id = :playlistId",
+    )
     suspend fun deleteDownloadOrigin(serverId: Long, itemId: UUID, playlistId: UUID)
 
     @Query("DELETE FROM download_origin WHERE server_id = :serverId AND item_id = :itemId")
@@ -119,7 +122,10 @@ interface OfflineDao {
     )
     suspend fun updatePlaylistLimits(serverId: Long, playlistId: UUID, maxItems: Int?, maxRuntimeMinutes: Int?)
 
-    @Query("UPDATE playlist SET last_synced_at = :lastSyncedAt WHERE server_id = :serverId AND playlist_id = :playlistId")
+    @Query(
+        "UPDATE playlist SET last_synced_at = :lastSyncedAt " +
+            "WHERE server_id = :serverId AND playlist_id = :playlistId",
+    )
     suspend fun updatePlaylistSynced(serverId: Long, playlistId: UUID, lastSyncedAt: Long)
 
     @Query("UPDATE playlist SET name = :name WHERE server_id = :serverId AND playlist_id = :playlistId")
@@ -167,7 +173,10 @@ interface OfflineDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertExclusion(entity: PlaylistExclusionEntity)
 
-    @Query("DELETE FROM playlist_exclusion WHERE server_id = :serverId AND playlist_id = :playlistId AND item_id = :itemId")
+    @Query(
+        "DELETE FROM playlist_exclusion " +
+            "WHERE server_id = :serverId AND playlist_id = :playlistId AND item_id = :itemId",
+    )
     suspend fun deleteExclusion(serverId: Long, playlistId: UUID, itemId: UUID)
 
     // Subtitles

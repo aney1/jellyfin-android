@@ -1,3 +1,7 @@
+// Fork: offline. Server, storage and database errors of any kind must not stop the offline sync.
+// Loops skip items that need nothing or failed with `continue`.
+@file:Suppress("TooGenericExceptionCaught", "LoopWithTooManyJumpStatements")
+
 package org.jellyfin.mobile.offline.sync
 
 import kotlinx.coroutines.CancellationException
@@ -54,7 +58,9 @@ class PlayStateSync(
      *
      * @return true if there is nothing left to send.
      */
-    suspend fun push(serverId: Long, userId: Long, itemId: UUID): Boolean = withContext(Dispatchers.IO) { pushSerialized(serverId, userId, itemId) }
+    suspend fun push(serverId: Long, userId: Long, itemId: UUID): Boolean = withContext(Dispatchers.IO) {
+        pushSerialized(serverId, userId, itemId)
+    }
 
     private suspend fun pushSerialized(serverId: Long, userId: Long, itemId: UUID): Boolean = mutex.withLock {
         // Read inside the lock: always send the newest local state
