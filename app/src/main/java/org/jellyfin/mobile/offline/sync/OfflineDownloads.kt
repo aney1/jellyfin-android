@@ -18,6 +18,7 @@ import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.playlist.PlaylistSync
+import org.jellyfin.sdk.api.client.ApiClient
 import timber.log.Timber
 import java.util.UUID
 
@@ -37,6 +38,7 @@ class OfflineDownloads(
     private val appPreferences: AppPreferences,
     private val storageManager: StorageManager,
     private val activityEventHandler: ActivityEventHandler,
+    private val apiClient: ApiClient,
 ) {
     /** Deletions one at a time, each re-checking the download right before removing it. */
     private val mutex = Mutex()
@@ -64,6 +66,10 @@ class OfflineDownloads(
         }
         val (server, user) = withContext(Dispatchers.IO) { serverDao.getServer(serverId) to userDao.getUser(userId) }
         if (server == null || user == null) return@Enqueuer
+        // Right after the app starts the client has the server but not the user yet (the web app signs in later)
+        check(apiClient.baseUrl == server.hostname && apiClient.accessToken == user.accessToken) {
+            "The app is not signed in yet"
+        }
         downloadManager.enqueueItems(server, user, itemIds)
     }
 

@@ -81,7 +81,7 @@ class OfflineMaintenance(
         cachePlayerSettings()
 
         if (includePlaylists && preferences.backgroundSync) {
-            playlistSync.syncAllInBackground(offlineDownloads.backgroundEnqueuer)
+            complete = playlistSync.syncAllInBackground(offlineDownloads.backgroundEnqueuer) && complete
         }
 
         deleteExpired(downloads, refreshedOwners)

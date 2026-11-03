@@ -117,8 +117,11 @@ class PlaylistSync(
     /**
      * Background pass: automatic playlists download new videos, and every playlist with downloads is refreshed
      * (for the offline screen and for removing downloads that left it).
+     *
+     * @return true if every playlist was synced.
      */
-    suspend fun syncAllInBackground(enqueuer: Enqueuer) = locked {
+    suspend fun syncAllInBackground(enqueuer: Enqueuer): Boolean = locked {
+        var complete = true
         val downloaded = offlineDownloads.downloadsOf(null, offlineDao.getAllPlaylistMemberships().map { it.itemId })
         val memberships = offlineDao.getAllPlaylistMemberships().groupBy({ it.playlistId }, { it.itemId })
         val origins = offlineDao.getDownloadOrigins().map { it.playlistId }.toSet()
@@ -129,17 +132,23 @@ class PlaylistSync(
                 memberships[playlist.playlistId].orEmpty().any { it in downloaded }
             if (!auto && !hasDownloads) continue
             try {
-                val entries = refreshSnapshot(playlist) ?: continue
+                val entries = refreshSnapshot(playlist)
+                if (entries == null) {
+                    complete = false
+                    continue
+                }
                 refreshed += playlist.playlistId
                 if (auto) downloadWanted(playlist, entries, enqueuer)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "Background sync of playlist %s failed", playlist.playlistId)
+                complete = false
             }
         }
         removeLeftPlaylists(refreshed)
         pruneUnused(downloaded.keys, origins)
+        complete
     }
 
     /**
@@ -157,8 +166,21 @@ class PlaylistSync(
                 listOf(DownloadOriginEntity(playlist.serverId, itemId, playlist.playlistId)),
             )
         }
-        recentlyRequested[itemId] = System.currentTimeMillis()
-        enqueuer.enqueue(playlist.serverId, playlist.userId, listOf(itemId))
+        request(playlist, listOf(itemId), System.currentTimeMillis(), enqueuer)
+    }
+
+    /**
+     * Mark [itemIds] as requested while the request is on its way; a failed request may be retried right away.
+     */
+    private suspend fun request(playlist: PlaylistEntity, itemIds: List<UUID>, now: Long, enqueuer: Enqueuer) {
+        itemIds.forEach { recentlyRequested[it] = now }
+        var sent = false
+        try {
+            enqueuer.enqueue(playlist.serverId, playlist.userId, itemIds)
+            sent = true
+        } finally {
+            if (!sent) itemIds.forEach { recentlyRequested.remove(it, now) }
+        }
     }
 
     /**
@@ -274,8 +296,7 @@ class PlaylistSync(
         offlineDao.insertDownloadOrigins(
             missing.map { DownloadOriginEntity(playlist.serverId, it, playlist.playlistId) },
         )
-        missing.forEach { recentlyRequested[it] = now }
-        enqueuer.enqueue(playlist.serverId, playlist.userId, missing)
+        request(playlist, missing, now, enqueuer)
         Timber.i("Started %d downloads for playlist %s", missing.size, playlist.playlistId)
         return missing.size
     }

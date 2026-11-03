@@ -36,7 +36,7 @@ val offlineModule = module {
     single { OfflineQueueSupport(get(), get(), get(), get(), get(), get()) }
     single { PlayStateSync(get(), get()) }
     single { DownloadExtras(androidContext(), get(), get(), get()) }
-    single { OfflineDownloads(androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { OfflineDownloads(androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PlaylistSync(get(), get(), get(), get(), get()) }
     single { OfflineMaintenance(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { OfflineCoordinator(get(), get(), get(), get()) }

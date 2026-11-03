@@ -87,8 +87,24 @@ class DownloadExtras(
     private suspend fun fetch(download: DownloadEntity, cache: ItemCacheEntity?): Boolean {
         val target = apiClients.get(download.serverId, download.userId) ?: return false
         // Each part on its own: one failing must not block the others
-        val item = runApi {
+        var gone = false
+        val item = runApi(onNotFound = { gone = true }) {
             target.api.userLibraryApi.getItem(itemId = download.itemId, userId = target.userId).content
+        }
+        if (gone) {
+            // Deleted on the server: keep playing the download with what it has, don't ask again
+            Timber.i("Item %s is gone on the server, using the downloaded details", download.itemId)
+            offlineDao.upsertItemCache(
+                ItemCacheEntity(
+                    serverId = download.serverId,
+                    itemId = download.itemId,
+                    item = cache?.item ?: download.item,
+                    segments = cache?.segments ?: EMPTY_LIST,
+                    subtitlesDone = true,
+                    fetchedAt = System.currentTimeMillis(),
+                ),
+            )
+            return true
         }
         val segments = runApi {
             target.api.mediaSegmentsApi.getItemSegments(
@@ -126,10 +142,14 @@ class DownloadExtras(
         }
     }
 
-    private suspend fun <T> runApi(block: suspend () -> T): T? = try {
+    private suspend fun <T> runApi(onNotFound: () -> Unit = {}, block: suspend () -> T): T? = try {
         block()
     } catch (e: CancellationException) {
         throw e
+    } catch (e: InvalidStatusException) {
+        if (e.status == HTTP_NOT_FOUND) onNotFound()
+        Timber.i("Offline extras request failed: HTTP %d", e.status)
+        null
     } catch (e: Exception) {
         Timber.i("Offline extras request failed: %s", e.message)
         null
@@ -223,6 +243,7 @@ class DownloadExtras(
     private companion object {
         const val SUBTITLE_DIRECTORY = "offline_subtitles"
         const val EMPTY_LIST = "[]"
+        const val HTTP_NOT_FOUND = 404
         const val SEGMENT_REFRESH_MS = 24L * 60 * 60 * 1000
         val CLIENT_ERRORS = 400..499
 
