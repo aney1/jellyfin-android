@@ -4,6 +4,7 @@ import de.Maxr1998.modernpreferences.PreferenceScreen
 import de.Maxr1998.modernpreferences.helpers.categoryHeader
 import de.Maxr1998.modernpreferences.helpers.checkBox
 import de.Maxr1998.modernpreferences.helpers.defaultOnCheckedChange
+import de.Maxr1998.modernpreferences.helpers.defaultOnSelectionChange
 import de.Maxr1998.modernpreferences.helpers.singleChoice
 import de.Maxr1998.modernpreferences.preferences.choice.SelectionItem
 import org.jellyfin.mobile.R
@@ -54,6 +55,10 @@ fun PreferenceScreen.Builder.offlineSettings() {
     singleChoice(OfflinePreferences.PREF_DELETE_WATCHED_AFTER, deleteOptions) {
         titleRes = R.string.pref_offline_delete_watched
         initialSelection = OfflinePreferences.DEFAULT_DELETE_WATCHED_AFTER_DAYS.toString()
+        defaultOnSelectionChange {
+            // Apply a shorter period to already watched downloads right away
+            GlobalContext.get().get<OfflineCoordinator>().onDeleteSettingChanged()
+        }
     }
 }
 

@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -59,7 +60,18 @@ class OfflineCoordinator(
      */
     fun onBackgroundSyncChanged(enabled: Boolean) = scheduler.schedulePeriodic(enabled)
 
+    /**
+     * The delete period changed: run the cleanup soon. Delayed, the setting is stored after this is called.
+     */
+    fun onDeleteSettingChanged() {
+        scope.launch {
+            delay(SETTING_APPLY_DELAY_MS)
+            scheduler.syncSoon()
+        }
+    }
+
     private companion object {
         const val DEBOUNCE_MS = 2_000L
+        const val SETTING_APPLY_DELAY_MS = 1_000L
     }
 }
