@@ -60,7 +60,8 @@ which can still be found [in the archives](https://github.com/jellyfin-archive/j
 
 This fork tracks upstream releases (currently **v2.7.3**) and adds the following on top. Most of the
 additions have a toggle in the app settings, so they can be turned off without rebuilding; the
-behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) are always on.
+behavioural fixes (back gestures, automatic PiP, queue resume, mark-as-played, system bars) are
+always on.
 
 ### Video player
 
@@ -84,9 +85,42 @@ behavioural fixes (back gesture, automatic PiP, queue resume, mark-as-played) ar
   played when you actively skip past it.
 - **Back gesture fix** — removes upstream's left-edge gesture exclusion rect so the system back
   gesture works along the whole edge; the drawer is opened by its button instead.
+- **System bars fix** — portrait videos hide the status and navigation bars again after returning
+  from the mini player or Picture-in-Picture.
+
+### Offline playlists
+
+Download whole playlists and keep watching without a connection. Everything lives in its own
+"Offline & playlist downloads" settings section.
+
+- **Playlist download controls**, injected into the web client's playlist page: a mode per playlist
+  — *Off* (download single videos by hand), *Semi-automatic* (a "Download new" button) or
+  *Automatic* — plus optional limits (maximum number of videos, skip videos longer than N minutes)
+  and a per-video download state with download / delete / "don't download" actions.
+  Only unwatched videos are downloaded automatically.
+- **Automatic sync** of automatic playlists when their page is opened, at app start and in the
+  background every few hours. Videos removed from a playlist lose their download if still unwatched;
+  watched ones wait for the delete period.
+- **Play downloaded copies** instead of streaming, per item, so a queue can mix local and streamed
+  videos; falls back to streaming if a local file can't be played. External (sidecar) subtitles and
+  media segments (skip intro/credits) are downloaded with the video and work offline.
+- **Watch state sync** — progress and played state of local playback are recorded on the device
+  and sent to the server once it is reachable, with a conflict check so a newer change made on
+  another device wins.
+- **Delete watched downloads** after a chosen period (never, right after watching, or 1–30 days;
+  default 1 day). Only watching that happens after the download counts, including on other devices.
+- **Offline screen** — opens automatically when the server can't be reached and downloads exist.
+  It lists each playlist with downloads (not-downloaded entries greyed out and skipped by autoplay)
+  and loose downloaded videos, uses the same native player and mini player, and offers Reconnect and
+  Change server.
+
+Downloads go through the app's regular download manager; the fork keeps its own database
+(`offline.db`) so upstream's data stays untouched.
 
 ### Web app shell
 
+- **Predictive back gesture** — opts into Android's predictive back, and lets the system handle back
+  (with its back-to-home preview) on the web client's start pages instead of always claiming it.
 - **Pull-to-refresh** on the embedded web client, triggered only when it is genuinely scrolled to
   the top.
 - **Extra navigation entries**, injected into jellyfin-web: a shortcut to a configured playlist, an
