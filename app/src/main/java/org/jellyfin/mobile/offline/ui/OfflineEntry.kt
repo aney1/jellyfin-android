@@ -60,8 +60,8 @@ object OfflineEntry : KoinComponent {
         val canSwitch = fragment.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !fragmentManager.isStateSaved
         when {
             !offline -> showConnectScreen()
-            // Don't cover a video in full screen; the offline screen shows up on the next connection error
-            !canSwitch || OfflineNavigation.isFullscreenPlayerOpen(fragmentManager) -> Unit
+            !canSwitch -> Unit
+            // With a player open, the offline screen comes once it is closed
             else -> OfflineNavigation.swap<OfflineFragment>(fragment)
         }
     }

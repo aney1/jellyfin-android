@@ -2,6 +2,7 @@ package org.jellyfin.mobile.offline.ui
 
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.MainViewModel
+import org.jellyfin.mobile.R
 import org.jellyfin.mobile.ServerState
 import org.jellyfin.mobile.ui.ComposeFragment
 import org.jellyfin.mobile.utils.BackPressInterceptor
@@ -57,13 +59,14 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
     private fun reconnect() {
         val server = (mainViewModel.serverState.value as? ServerState.Available)?.server ?: return
         if (!isAdded || parentFragmentManager.isStateSaved) return
-        // Keeps a (mini) player that is playing a download
-        OfflineNavigation.swap<WebViewFragment>(
+        // Keeps a (mini) player that is playing a download: then the web app comes once it is closed
+        val switched = OfflineNavigation.swap<WebViewFragment>(
             this,
             Bundle().apply {
                 putParcelable(Constants.FRAGMENT_WEB_VIEW_EXTRA_SERVER, server)
             },
         )
+        if (!switched) Toast.makeText(requireContext(), R.string.offline_reconnect_after_player, Toast.LENGTH_SHORT).show()
     }
 
     override val canInterceptBackPress: Boolean
