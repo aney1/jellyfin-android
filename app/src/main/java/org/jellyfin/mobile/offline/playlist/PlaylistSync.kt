@@ -174,7 +174,7 @@ class PlaylistSync(
         val origins = offlineDao.getDownloadOriginsOfItem(playlist.serverId, itemId)
         if (origins.none { it.playlistId == playlist.playlistId }) return@locked
         offlineDao.deleteDownloadOrigin(playlist.serverId, itemId, playlist.playlistId)
-        if (origins.all { it.playlistId == playlist.playlistId }) offlineDownloads.delete(playlist.serverId, itemId)
+        if (origins.all { it.playlistId == playlist.playlistId }) deleteUnlessPlaying(playlist.serverId, itemId)
     }
 
     /**
@@ -185,7 +185,12 @@ class PlaylistSync(
         if (playlist.mode != PlaylistDownloadMode.OFF) {
             offlineDao.insertExclusion(PlaylistExclusionEntity(playlist.serverId, playlist.playlistId, itemId))
         }
-        offlineDownloads.delete(playlist.serverId, itemId)
+        deleteUnlessPlaying(playlist.serverId, itemId)
+    }
+
+    private suspend fun deleteUnlessPlaying(serverId: Long, itemId: UUID) {
+        val deleted = offlineDownloads.delete(serverId, itemId) { offlinePlayback.itemInUse != itemId }
+        if (!deleted) Timber.i("Not deleting download %s, it is playing", itemId)
     }
 
     /**
@@ -196,6 +201,7 @@ class PlaylistSync(
     private suspend fun refreshSnapshot(playlist: PlaylistEntity): List<PlaylistEntryEntity>? {
         val target = apiClients.get(playlist.serverId, playlist.userId) ?: return null
         return try {
+            val versionsBefore = playStateSync.versionsOf(playlist.serverId, playlist.userId)
             val items = target.api.playlistsApi.getPlaylistItems(
                 playlistId = playlist.playlistId,
                 userId = target.userId,
@@ -209,7 +215,7 @@ class PlaylistSync(
                 PlaylistEntryEntity(playlist.serverId, playlist.playlistId, index, item.id, item)
             }
             offlineDao.replacePlaylistEntries(playlist.serverId, playlist.playlistId, entries)
-            playStateSync.applyServerItems(playlist.serverId, playlist.userId, items)
+            playStateSync.applyServerItems(playlist.serverId, playlist.userId, items, versionsBefore)
             if (playlist.name.isBlank()) {
                 fetchName(playlist.serverId, playlist.userId, playlist.playlistId)?.let { setName(playlist, it) }
             }
@@ -301,13 +307,18 @@ class PlaylistSync(
             val candidates = OfflineRules.leftPlaylists(
                 origins = byItem,
                 knownSnapshots = knownSnapshots,
+                refreshed = refreshed,
                 now = now,
                 grace = REMOVAL_GRACE,
                 itemInUse = offlinePlayback.itemInUse,
             )
-
-            val userId = serverOrigins.firstNotNullOfOrNull { userOfPlaylist[it.playlistId] }
-            if (candidates.isNotEmpty() && userId != null) removeUnwatched(serverId, userId, candidates)
+            // Each item is checked with the user whose playlist it was downloaded for
+            val candidatesByUser = candidates.groupBy { itemId ->
+                byItem[itemId].orEmpty().firstNotNullOfOrNull { userOfPlaylist[it.playlistId] }
+            }
+            for ((userId, userCandidates) in candidatesByUser) {
+                if (userId != null) removeUnwatched(serverId, userId, userCandidates.toSet())
+            }
         }
     }
 

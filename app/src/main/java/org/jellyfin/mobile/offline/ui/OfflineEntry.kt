@@ -6,29 +6,38 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jellyfin.mobile.app.AppPreferences
+import org.jellyfin.mobile.data.dao.ServerDao
 import org.jellyfin.mobile.offline.LocalCopyResolver
-import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.OfflinePreferences
-import org.jellyfin.sdk.api.client.extensions.systemApi
+import org.jellyfin.mobile.webapp.WebViewFragment
 import org.jellyfin.sdk.model.api.MediaType
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import timber.log.Timber
+import java.io.IOException
 import java.util.Collections
 import java.util.WeakHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * Fork: offline. Decides what to show when the web app can't reach the server: the offline screen if there
  * are downloaded videos, otherwise upstream's connect screen.
  */
 object OfflineEntry : KoinComponent {
-    private const val PING_TIMEOUT_MS = 3_000L
+    private const val PING_TIMEOUT_SECONDS = 3L
 
     private val preferences: OfflinePreferences by inject()
     private val appPreferences: AppPreferences by inject()
+    private val serverDao: ServerDao by inject()
     private val localCopyResolver: LocalCopyResolver by inject()
-    private val apiClients: OfflineApiClients by inject()
+    private val okHttpClient: OkHttpClient by inject()
+
+    private val pingClient by lazy {
+        okHttpClient.newBuilder().callTimeout(PING_TIMEOUT_SECONDS, TimeUnit.SECONDS).build()
+    }
 
     private val handling: MutableSet<Fragment> = Collections.newSetFromMap(WeakHashMap())
 
@@ -52,8 +61,10 @@ object OfflineEntry : KoinComponent {
     }
 
     private suspend fun handle(fragment: Fragment, showConnectScreen: () -> Unit) {
+        // The web view's server (lateinit, may not be set yet), otherwise the one the app uses
+        val hostname = runCatching { (fragment as? WebViewFragment)?.server?.hostname }.getOrNull() ?: currentHostname()
         // Some web app errors happen while the server is fine (e.g. missing credentials): keep upstream's handling
-        val offline = !isServerReachable() && hasOfflineContent()
+        val offline = !isServerReachable(hostname) && hasOfflineContent()
         // The fragment may have been replaced in the meantime
         if (!fragment.isAdded) return
         val fragmentManager = fragment.parentFragmentManager
@@ -62,8 +73,8 @@ object OfflineEntry : KoinComponent {
         when {
             !offline -> showConnectScreen()
             !canSwitch -> Unit
-            // With a player open, the offline screen comes once it is closed
-            else -> OfflineNavigation.swap<OfflineFragment>(fragment)
+            // With a player open, the offline screen comes once it is closed, if the server is still unreachable
+            else -> OfflineNavigation.swap(fragment, OfflineFragment::class.java) { !isServerReachable(hostname) }
         }
     }
 
@@ -74,14 +85,26 @@ object OfflineEntry : KoinComponent {
         localCopyResolver.findAll().values.any { it.download.item.mediaType == MediaType.VIDEO }
 
     /**
-     * Whether the server the app is signed in to answers.
+     * The address of the server the app uses.
      */
-    suspend fun isServerReachable(): Boolean = withContext(Dispatchers.IO) {
-        val serverId = appPreferences.currentServerId ?: return@withContext false
-        val userId = appPreferences.currentUserId ?: return@withContext false
-        val target = apiClients.get(serverId, userId) ?: return@withContext false
-        withTimeoutOrNull(PING_TIMEOUT_MS) {
-            runCatching { target.api.systemApi.getPublicSystemInfo() }.isSuccess
-        } ?: false
+    suspend fun currentHostname(): String? = withContext(Dispatchers.IO) {
+        appPreferences.currentServerId?.let { serverDao.getServer(it) }?.hostname
+    }
+
+    /**
+     * Whether the server at [hostname] answers. Uses the public system info, so no signed-in user is needed.
+     */
+    suspend fun isServerReachable(hostname: String?): Boolean = withContext(Dispatchers.IO) {
+        val url = hostname?.trimEnd('/')?.let { "$it/System/Info/Public" } ?: return@withContext false
+        try {
+            val request = Request.Builder().url(url).build()
+            pingClient.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: IOException) {
+            Timber.d("Server not reachable: %s", e.message)
+            false
+        } catch (e: IllegalArgumentException) {
+            Timber.d("Invalid server address: %s", e.message)
+            false
+        }
     }
 }

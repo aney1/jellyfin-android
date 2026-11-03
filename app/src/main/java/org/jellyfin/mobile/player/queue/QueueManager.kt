@@ -135,7 +135,7 @@ class QueueManager(
         playWhenReady: Boolean = true,
         resumeFromSavedPosition: Boolean = false,
     ): PlayerException? {
-        val localCopy = offlineQueue.localCopyFor(itemId, mediaSourceId, downloadsOnlyQueue)
+        val localCopy = offlineQueue.localCopyFor(itemId, mediaSourceId, subtitleStreamIndex, downloadsOnlyQueue)
         if (localCopy != null) {
             // Protect the download from the cleanup while it starts; keep the old one if starting fails
             val previousItemInUse = offlineQueue.itemInUse
@@ -177,7 +177,7 @@ class QueueManager(
         resumeFromSavedPosition: Boolean = false, // Fork: offline
         localCopy: LocalCopyResolver.LocalCopy? = null, // Fork: offline - the copy chosen by startItem()
     ): PlayerException? {
-        val download = localCopy?.download ?: withContext(Dispatchers.IO) {
+        val download = localCopy?.download ?: withContext(Dispatchers.IO) { // Fork: offline - copy chosen by startItem()
             downloadDao.getDownloadByItemId(itemId)
         } ?: return PlayerException.UnsupportedContent()
 
@@ -530,7 +530,7 @@ class QueueManager(
     private fun createDownloadVideoMediaSource(
         mediaSourceId: String,
         fileUri: Uri,
-        subtitleConfigurations: List<MediaItem.SubtitleConfiguration> = emptyList(),
+        subtitleConfigurations: List<MediaItem.SubtitleConfiguration> = emptyList(), // Fork: offline
     ): MediaSource {
         val factory: MediaSource.Factory = get()
 
@@ -538,7 +538,7 @@ class QueueManager(
             .setMediaId(mediaSourceId)
             .setUri(fileUri)
             .setCustomCacheKey(fileUri.toString())
-            .setSubtitleConfigurations(subtitleConfigurations)
+            .setSubtitleConfigurations(subtitleConfigurations) // Fork: offline - downloaded external subtitles
             .build()
 
         return factory.createMediaSource(mediaItem)
@@ -561,6 +561,7 @@ class QueueManager(
                 audioStreamIndex = stream.index,
                 subtitleStreamIndex = currentMediaSource.selectedSubtitleStreamIndex,
                 playWhenReady = currentPlayState.playWhenReady,
+                localCopy = offlineQueue.localCopyOf(currentMediaSource), // Fork: offline - the same download
             )
             is RemoteJellyfinMediaSource -> startRemotePlayback(
                 itemId = currentMediaSource.itemId,
@@ -595,6 +596,7 @@ class QueueManager(
                 audioStreamIndex = mediaSource.selectedAudioStreamIndex,
                 subtitleStreamIndex = stream?.index ?: -1, // -1 disables subtitles, null would select the default subtitle
                 playWhenReady = currentPlayState.playWhenReady,
+                localCopy = offlineQueue.localCopyOf(mediaSource), // Fork: offline - the same download
             )
             is RemoteJellyfinMediaSource -> startRemotePlayback(
                 itemId = mediaSource.itemId,

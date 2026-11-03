@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.downloads.DownloadStatus
 import org.jellyfin.mobile.offline.OfflinePreferences
+import org.jellyfin.mobile.offline.data.OfflineDao
+import java.util.UUID
 
 /**
  * Fork: offline. Started once from the application: schedules the background sync and fetches the extras
@@ -22,6 +24,7 @@ import org.jellyfin.mobile.offline.OfflinePreferences
  */
 class OfflineCoordinator(
     private val downloadDao: DownloadDao,
+    private val offlineDao: OfflineDao,
     private val preferences: OfflinePreferences,
     private val scheduler: OfflineSyncScheduler,
 ) {
@@ -42,18 +45,27 @@ class OfflineCoordinator(
         )
 
         scope.launch {
-            var known = emptySet<Long>()
+            var known: Set<Pair<Long, UUID>>? = null
             downloadDao.getAllDownloads()
-                .map { downloads -> downloads.filter { it.status == DownloadStatus.DOWNLOADED }.map { it.id }.toSet() }
+                .map { downloads ->
+                    downloads.filter { it.status == DownloadStatus.DOWNLOADED }.map { it.serverId to it.itemId }.toSet()
+                }
                 .distinctUntilChanged()
                 .debounce(DEBOUNCE_MS)
                 .collect { finished ->
-                    // Only newly finished downloads need their extras; removals (e.g. auto delete) don't
-                    if ((finished - known).isNotEmpty()) scheduler.syncSoon()
+                    // Only newly finished downloads need their extras; removals (e.g. auto delete) don't. After a
+                    // process start, only downloads whose extras are still missing.
+                    val new = known?.let { finished - it } ?: (finished - completeExtras())
+                    if (new.isNotEmpty()) scheduler.syncSoon()
                     known = finished
                 }
         }
     }
+
+    private suspend fun completeExtras(): Set<Pair<Long, UUID>> = offlineDao.getItemCaches()
+        .filter { it.item != null && it.subtitlesDone }
+        .map { it.serverId to it.itemId }
+        .toSet()
 
     /**
      * The background sync setting changed to [enabled].

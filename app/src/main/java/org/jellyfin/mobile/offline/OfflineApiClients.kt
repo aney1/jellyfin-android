@@ -23,6 +23,13 @@ class OfflineApiClients(
 
     private val clients = ConcurrentHashMap<Key, Target>()
 
+    /**
+     * Whether the server user is still known to the app (it may be logged out).
+     */
+    suspend fun exists(serverId: Long, userId: Long): Boolean = withContext(Dispatchers.IO) {
+        userDao.getServerUser(serverId, userId) != null
+    }
+
     suspend fun get(serverId: Long, userId: Long): Target? = withContext(Dispatchers.IO) {
         val serverUser = userDao.getServerUser(serverId, userId) ?: return@withContext null
         val accessToken = serverUser.user.accessToken ?: return@withContext null

@@ -52,18 +52,25 @@ interface OfflineDao {
 
     /**
      * Replace a row with the server's state, unless it was changed locally since [expectedUpdatedAt] was read
-     * (or, without an expected version, unless it has unsent local changes).
+     * (null: the row did not exist then). Rows with unsent local changes are only replaced with [allowDirty].
      */
     @Transaction
-    suspend fun replaceWithServerState(entity: PlayStateEntity, expectedUpdatedAt: Long?): Boolean {
+    suspend fun replaceWithServerState(
+        entity: PlayStateEntity,
+        expectedUpdatedAt: Long?,
+        allowDirty: Boolean,
+    ): Boolean {
         val current = getPlayState(entity.serverId, entity.userId, entity.itemId)
         val unchanged = when (expectedUpdatedAt) {
-            null -> current == null || !current.dirty
-            else -> current != null && current.updatedAt == expectedUpdatedAt
+            null -> current == null
+            else -> current != null && current.updatedAt == expectedUpdatedAt && (allowDirty || !current.dirty)
         }
         if (unchanged && current != entity) upsertPlayState(entity)
         return unchanged
     }
+
+    @Query("SELECT * FROM play_state WHERE server_id = :serverId AND user_id = :userId")
+    suspend fun getPlayStatesOf(serverId: Long, userId: Long): List<PlayStateEntity>
 
     @Query("SELECT * FROM play_state WHERE dirty = 0")
     suspend fun getCleanPlayStates(): List<PlayStateEntity>

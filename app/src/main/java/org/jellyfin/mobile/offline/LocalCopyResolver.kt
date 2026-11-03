@@ -50,6 +50,11 @@ class LocalCopyResolver(
         null
     }
 
+    suspend fun findByDownloadId(downloadId: Long): LocalCopy? = withContext(Dispatchers.IO) {
+        val download = downloadDao.getDownload(downloadId)?.takeIf { it.status == DownloadStatus.DOWNLOADED }
+        download?.let { toLocalCopy(DownloadFiles(it, downloadDao.getFiles(it.id))) }
+    }
+
     /**
      * All playable downloads by item id.
      */

@@ -11,9 +11,12 @@ import org.jellyfin.mobile.offline.OfflineApiClients
 import org.jellyfin.mobile.offline.OfflinePreferences
 import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.player.source.ExternalSubtitleStream
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.extensions.ticks
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import java.io.File
@@ -52,6 +55,7 @@ class OfflineQueueSupport(
     suspend fun localCopyFor(
         itemId: UUID,
         mediaSourceId: String?,
+        subtitleStreamIndex: Int?,
         downloadsOnly: Boolean,
     ): LocalCopyResolver.LocalCopy? {
         if (downloadsOnly) return localCopyResolver.find(itemId)
@@ -71,8 +75,31 @@ class OfflineQueueSupport(
         val hasExternalSubtitles = source.mediaStreams.orEmpty().any { it.isDownloadableExternalSubtitle }
         val subtitlesStored = offlineDao.getItemCache(copy.download.serverId, itemId)?.subtitlesDone == true
         if (hasExternalSubtitles && !subtitlesStored) return null
-        return copy
+
+        val subtitleIndex = subtitleStreamIndex ?: source.defaultSubtitleStreamIndex
+        return copy.takeIf { isSubtitlePlayable(copy, source, subtitleIndex) }
     }
+
+    /**
+     * The chosen (or default) subtitle must be playable from the download: external image subtitles and ones the
+     * server couldn't deliver are not stored, streaming shows them.
+     */
+    private suspend fun isSubtitlePlayable(
+        copy: LocalCopyResolver.LocalCopy,
+        source: MediaSourceInfo,
+        index: Int?,
+    ): Boolean {
+        val subtitle = source.mediaStreams.orEmpty().find { it.index == index && it.type == MediaStreamType.SUBTITLE }
+        if (subtitle == null || !subtitle.isExternal) return true
+        val storedFiles = offlineDao.getSubtitleFiles(copy.download.serverId, copy.download.itemId)
+        return storedFiles.any { it.streamIndex == subtitle.index }
+    }
+
+    /**
+     * The download a playing local source comes from (its play session id is the download id).
+     */
+    suspend fun localCopyOf(source: LocalJellyfinMediaSource): LocalCopyResolver.LocalCopy? =
+        source.playSessionId.toLongOrNull()?.let { localCopyResolver.findByDownloadId(it) }
 
     /**
      * The downloaded item the player uses, protected from the cleanup.

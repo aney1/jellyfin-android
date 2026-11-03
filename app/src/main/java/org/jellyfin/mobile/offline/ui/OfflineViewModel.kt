@@ -118,7 +118,7 @@ class OfflineViewModel(
     /** Whether the server answers again, checked only while the screen is shown. */
     val serverReachable: StateFlow<Boolean> = flow {
         while (true) {
-            emit(OfflineEntry.isServerReachable())
+            emit(OfflineEntry.isServerReachable(OfflineEntry.currentHostname()))
             delay(PING_INTERVAL_MS)
         }
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)

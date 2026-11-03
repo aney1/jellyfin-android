@@ -60,11 +60,13 @@ class OfflineRulesTest : FunSpec({
         val item = id()
         val now = 10 * day
         val grace = 10.minutes
+        val refreshed = setOf(playlist, other)
 
         test("removed after missing longer than the grace period") {
             OfflineRules.leftPlaylists(
                 origins = mapOf(item to listOf(OfflineRules.Origin(playlist, now - grace.inWholeMilliseconds))),
                 knownSnapshots = mapOf(playlist to emptySet()),
+                refreshed = refreshed,
                 now = now,
                 grace = grace,
                 itemInUse = null,
@@ -75,6 +77,7 @@ class OfflineRulesTest : FunSpec({
             OfflineRules.leftPlaylists(
                 origins = mapOf(item to listOf(OfflineRules.Origin(playlist, now - 1000))),
                 knownSnapshots = mapOf(playlist to emptySet()),
+                refreshed = refreshed,
                 now = now,
                 grace = grace,
                 itemInUse = null,
@@ -85,6 +88,7 @@ class OfflineRulesTest : FunSpec({
             OfflineRules.leftPlaylists(
                 origins = mapOf(item to listOf(OfflineRules.Origin(playlist, 0))),
                 knownSnapshots = mapOf(playlist to emptySet(), other to setOf(item)),
+                refreshed = refreshed,
                 now = now,
                 grace = grace,
                 itemInUse = null,
@@ -95,6 +99,18 @@ class OfflineRulesTest : FunSpec({
             OfflineRules.leftPlaylists(
                 origins = mapOf(item to listOf(OfflineRules.Origin(playlist, 0), OfflineRules.Origin(other, null))),
                 knownSnapshots = mapOf(playlist to emptySet()),
+                refreshed = refreshed,
+                now = now,
+                grace = grace,
+                itemInUse = null,
+            ).shouldBeEmpty()
+        }
+
+        test("kept when its playlist was not refreshed just now (only an older stored snapshot misses it)") {
+            OfflineRules.leftPlaylists(
+                origins = mapOf(item to listOf(OfflineRules.Origin(playlist, 0))),
+                knownSnapshots = mapOf(playlist to emptySet()),
+                refreshed = setOf(other),
                 now = now,
                 grace = grace,
                 itemInUse = null,
@@ -105,6 +121,7 @@ class OfflineRulesTest : FunSpec({
             OfflineRules.leftPlaylists(
                 origins = mapOf(item to listOf(OfflineRules.Origin(playlist, 0))),
                 knownSnapshots = mapOf(playlist to emptySet()),
+                refreshed = refreshed,
                 now = now,
                 grace = grace,
                 itemInUse = item,

@@ -60,9 +60,10 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
         val server = (mainViewModel.serverState.value as? ServerState.Available)?.server ?: return
         if (!isAdded || parentFragmentManager.isStateSaved) return
         // Keeps a (mini) player that is playing a download: then the web app comes once it is closed
-        val switched = OfflineNavigation.swap<WebViewFragment>(
-            this,
-            Bundle().apply {
+        val switched = OfflineNavigation.swap(
+            current = this,
+            target = WebViewFragment::class.java,
+            args = Bundle().apply {
                 putParcelable(Constants.FRAGMENT_WEB_VIEW_EXTRA_SERVER, server)
             },
         )

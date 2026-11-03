@@ -14,6 +14,7 @@ import org.jellyfin.mobile.offline.data.OfflineDao
 import org.jellyfin.mobile.offline.data.PlayStateEntity
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 import org.jellyfin.sdk.model.api.UserItemDataDto
@@ -71,7 +72,7 @@ class PlayStateSync(
         } catch (e: CancellationException) {
             throw e
         } catch (e: InvalidStatusException) {
-            if (e.status == HTTP_NOT_FOUND) {
+            if (e.status == HTTP_NOT_FOUND && isItemGone(state)) {
                 // The item is gone on the server, there is nothing to sync it to anymore
                 offlineDao.deletePlayState(serverId, userId, itemId)
                 true
@@ -85,13 +86,38 @@ class PlayStateSync(
         }
     }
 
-    private suspend fun pushLocked(state: PlayStateEntity): Boolean {
+    /**
+     * A 404 can also come from a proxy or a server that is restarting: only drop local changes when the item itself
+     * is confirmed missing.
+     */
+    private suspend fun isItemGone(state: PlayStateEntity): Boolean {
         val target = apiClients.get(state.serverId, state.userId) ?: return false
+        return try {
+            target.api.userLibraryApi.getItem(itemId = state.itemId, userId = target.userId)
+            false
+        } catch (e: InvalidStatusException) {
+            e.status == HTTP_NOT_FOUND
+        }
+    }
+
+    private suspend fun pushLocked(state: PlayStateEntity): Boolean {
+        val target = apiClients.get(state.serverId, state.userId)
+        if (target == null) {
+            // Server or user removed from the app: nothing to send to anymore. Logged out: send after the next login.
+            if (!apiClients.exists(state.serverId, state.userId)) {
+                offlineDao.deletePlayState(state.serverId, state.userId, state.itemId)
+            }
+            return true
+        }
         val serverData = target.api.itemsApi.getItemUserData(state.itemId, target.userId).content
 
         if (serverWins(state, serverData)) {
             Timber.i("Watch state of %s changed on the server, dropping the local change", state.itemId)
-            offlineDao.replaceWithServerState(state.fromServer(serverData), expectedUpdatedAt = state.updatedAt)
+            offlineDao.replaceWithServerState(
+                entity = state.fromServer(serverData),
+                expectedUpdatedAt = state.updatedAt,
+                allowDirty = true,
+            )
             return true
         }
 
@@ -111,13 +137,13 @@ class PlayStateSync(
             itemId = state.itemId,
             updatedAt = state.updatedAt,
             serverPlayed = state.played,
-            serverLastPlayedAt = state.lastPlayedAt ?: serverData.lastPlayedDate?.toEpochMillis(),
+            serverLastPlayedAt = state.lastPlayedAt ?: serverData.lastPlayedDate?.toEpochMillisOrNull(),
         )
         return true
     }
 
     private fun serverWins(state: PlayStateEntity, serverData: UserItemDataDto): Boolean {
-        val serverLastPlayed = serverData.lastPlayedDate?.toEpochMillis()
+        val serverLastPlayed = serverData.lastPlayedDate?.toEpochMillisOrNull()
         val hasBaseline = state.serverPlayed != null
         // Played elsewhere at a known time: the newer one wins
         if (serverLastPlayed != null && (!hasBaseline || !sameTime(serverLastPlayed, state.serverLastPlayedAt))) {
@@ -134,26 +160,40 @@ class PlayStateSync(
         if (itemIds.isEmpty()) return@withContext
         val target = apiClients.get(serverId, userId) ?: error("No api client for server user ($serverId, $userId)")
         for (chunk in itemIds.distinct().chunked(BATCH_SIZE)) {
+            val versionsBefore = versionsOf(serverId, userId)
             val items = target.api.itemsApi.getItems(
                 userId = target.userId,
                 ids = chunk,
                 enableUserData = true,
                 enableImages = false,
             ).content.items
-            applyServerItems(serverId, userId, items)
+            applyServerItems(serverId, userId, items, versionsBefore)
         }
     }
 
     /**
-     * Store the watch states contained in items fetched from the server. Rows with unsent local changes are kept.
+     * Versions of the local rows of a server user, to be read before a request whose answer is passed to
+     * [applyServerItems].
      */
-    suspend fun applyServerItems(serverId: Long, userId: Long, items: List<BaseItemDto>) {
+    suspend fun versionsOf(serverId: Long, userId: Long): Map<UUID, Long> =
+        offlineDao.getPlayStatesOf(serverId, userId).associate { it.itemId to it.updatedAt }
+
+    /**
+     * Store the watch states contained in items fetched from the server. Rows with unsent local changes are kept,
+     * and so are rows that changed since [versionsBefore] were read (the answer may be older than them).
+     */
+    suspend fun applyServerItems(
+        serverId: Long,
+        userId: Long,
+        items: List<BaseItemDto>,
+        versionsBefore: Map<UUID, Long>,
+    ) {
         for (item in items) {
             val userData = item.userData ?: continue
             val existing = offlineDao.getPlayState(serverId, userId, item.id)
-            if (existing?.dirty == true) continue
+            if (existing?.dirty == true || existing?.updatedAt != versionsBefore[item.id]) continue
             val updated = (existing ?: emptyState(serverId, userId, item.id)).fromServer(userData)
-            offlineDao.replaceWithServerState(updated, expectedUpdatedAt = null)
+            offlineDao.replaceWithServerState(updated, expectedUpdatedAt = versionsBefore[item.id], allowDirty = false)
         }
     }
 
@@ -170,7 +210,7 @@ class PlayStateSync(
     )
 
     private fun PlayStateEntity.fromServer(userData: UserItemDataDto): PlayStateEntity {
-        val lastPlayed = userData.lastPlayedDate?.toEpochMillis()
+        val lastPlayed = userData.lastPlayedDate?.toEpochMillisOrNull()
         return copy(
             positionTicks = userData.playbackPositionTicks,
             played = userData.played,
@@ -201,6 +241,15 @@ class PlayStateSync(
     }
 }
 
-fun LocalDateTime.toEpochMillis(): Long = atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+/**
+ * Null for dates the SDK uses for "unknown" (it decodes unparseable dates as [LocalDateTime.MIN]).
+ */
+fun LocalDateTime.toEpochMillisOrNull(): Long? = if (year < MIN_SANE_YEAR) {
+    null
+} else {
+    atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+}
+
+private const val MIN_SANE_YEAR = 1971
 
 fun Long.toLocalDateTime(): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(this), ZoneId.systemDefault())

@@ -52,10 +52,14 @@ object OfflineRules {
      * @param origins the playlists each downloaded item was downloaded for.
      * @param knownSnapshots current entries of every playlist that was refreshed at least once. Items still in any
      * of them are kept, and origins pointing to a playlist that was never refreshed count as still present.
+     * @param refreshed playlists refreshed successfully just now: the removal must be confirmed by a fresh refresh of
+     * every playlist the item was downloaded for, not only by an older stored snapshot.
      */
+    @Suppress("LongParameterList")
     fun leftPlaylists(
         origins: Map<UUID, List<Origin>>,
         knownSnapshots: Map<UUID, Set<UUID>>,
+        refreshed: Set<UUID>,
         now: Long,
         grace: Duration,
         itemInUse: UUID?,
@@ -63,7 +67,8 @@ object OfflineRules {
         itemId != itemInUse &&
             itemOrigins.isNotEmpty() &&
             itemOrigins.all { origin ->
-                origin.playlistId in knownSnapshots &&
+                origin.playlistId in refreshed &&
+                    origin.playlistId in knownSnapshots &&
                     origin.missingSince != null &&
                     now - origin.missingSince >= grace.inWholeMilliseconds
             } &&

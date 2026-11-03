@@ -117,6 +117,8 @@ class OfflineDownloads(
      * @return false if a file of the download that no other download uses couldn't be deleted.
      */
     private suspend fun deleteFiles(download: DownloadEntity): Boolean {
+        // An unmounted card or a lost folder permission makes every file look missing, keep the download then
+        if (!storageManager.isStorageLocationAccessible()) return false
         val usedElsewhere = downloadDao.getAllDownloadsWithFiles().first()
             .filter { it.download.id != download.id }
             .flatMap { other -> other.files.map { it.uri } }

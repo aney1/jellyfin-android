@@ -39,7 +39,7 @@ val offlineModule = module {
     single { OfflineDownloads(androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PlaylistSync(get(), get(), get(), get(), get()) }
     single { OfflineMaintenance(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { OfflineCoordinator(get(), get(), get()) }
+    single { OfflineCoordinator(get(), get(), get(), get()) }
 
     viewModel { OfflineViewModel(get(), get(), get(), get()) }
 }

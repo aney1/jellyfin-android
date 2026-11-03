@@ -186,12 +186,13 @@ class DownloadExtras(
     }
 
     /**
-     * Media segments stored for a downloaded item, null if there are none (not a download, or not fetched yet).
+     * Media segments stored for a downloaded item, null if there are none (not a download, not fetched yet, or none
+     * found: the server may have detected them since).
      */
     suspend fun cachedSegments(itemId: UUID): List<MediaSegmentDto>? =
         offlineDao.getItemCacheByItemId(itemId)?.segments?.let { json ->
             runCatching { OfflineJson.decodeFromString(segmentsSerializer, json) }.getOrNull()
-        }
+        }?.takeIf { it.isNotEmpty() }
 
     /**
      * Remove the stored subtitle files of an item; the database rows are removed by the caller.
