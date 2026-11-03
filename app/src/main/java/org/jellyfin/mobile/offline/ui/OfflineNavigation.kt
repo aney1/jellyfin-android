@@ -15,7 +15,8 @@ import java.util.WeakHashMap
  *
  * Upstream's replaceFragment would also remove the PlayerFragment that lives in the same container, and adding the
  * new screen above the player would make it the fragment that receives back presses (MainActivity routes them to
- * the last added fragment). So while a player is open the switch waits until it is closed.
+ * the last added fragment). So while a full screen player is open the switch waits until it is closed. Below a
+ * mini player a screen that hands back presses on to the player (the offline screen) can switch right away.
  */
 object OfflineNavigation {
     /** Screens with a switch waiting for the player to close, one per screen. */
@@ -30,6 +31,8 @@ object OfflineNavigation {
     /**
      * Replace [current] with a new [target], right away or once the open player is closed.
      *
+     * @param underMiniPlayer switch right away below a mini player; [target] then gets the back presses and has
+     * to pass them on to the player (see [OfflineFragment.onInterceptBackPressed]).
      * @param stillWanted checked again before a switch that had to wait, the situation may have changed by then.
      * @return false if the switch waits for the player to be closed.
      */
@@ -37,11 +40,19 @@ object OfflineNavigation {
         current: Fragment,
         target: Class<out Fragment>,
         args: Bundle? = null,
+        underMiniPlayer: Boolean = false,
         stillWanted: suspend () -> Boolean = { true },
     ): Boolean {
         val fragmentManager = current.parentFragmentManager
-        if (player(fragmentManager) == null) {
+        val player = player(fragmentManager)
+        if (player == null) {
             switch(current, fragmentManager, target, args)
+            return true
+        }
+        if (underMiniPlayer && player.isMiniPlayer) {
+            switch(current, fragmentManager, target, args)
+            // Keep the mini player floating above the new screen, once the transaction has added it
+            player.requireActivity().window.decorView.post { player.bringMiniPlayerToFront() }
             return true
         }
         if (!pending.add(current)) return false

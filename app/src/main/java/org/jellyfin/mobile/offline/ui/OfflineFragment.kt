@@ -13,6 +13,7 @@ import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.MainViewModel
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.ServerState
+import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.ui.ComposeFragment
 import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.mobile.utils.Constants
@@ -72,12 +73,25 @@ class OfflineFragment : ComposeFragment(), BackPressInterceptor {
         }
     }
 
+    /**
+     * A player opened on top of this screen gets the back presses itself, but one this screen was put below
+     * (see [OfflineNavigation.swap]) relies on this screen to pass them on, like the player does when it is shown
+     * as a mini player over the web app: back closes the open playlist first, then the player.
+     */
+    private val playerBelow: PlayerFragment?
+        get() = if (isAdded) OfflineNavigation.player(parentFragmentManager) else null
+
     override val canInterceptBackPress: Boolean
-        get() = viewModel.isPlaylistOpen
+        get() = viewModel.isPlaylistOpen || playerBelow != null
 
     override fun onInterceptBackPressed(): Boolean {
-        if (!viewModel.isPlaylistOpen) return false
-        viewModel.openPlaylist(null)
+        val player = playerBelow
+        when {
+            player != null && !player.isMiniPlayer -> player.closePlayer()
+            viewModel.isPlaylistOpen -> viewModel.openPlaylist(null)
+            player != null -> player.closePlayer()
+            else -> return false
+        }
         return true
     }
 }

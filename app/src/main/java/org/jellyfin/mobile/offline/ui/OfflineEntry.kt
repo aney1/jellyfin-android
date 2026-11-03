@@ -73,8 +73,10 @@ object OfflineEntry : KoinComponent {
         when {
             !offline -> showConnectScreen()
             !canSwitch -> Unit
-            // With a player open, the offline screen comes once it is closed, if the server is still unreachable
-            else -> OfflineNavigation.swap(fragment, OfflineFragment::class.java) { !isServerReachable(hostname) }
+            // Below a mini player right away; with a full screen player once it is closed, if still unreachable
+            else -> OfflineNavigation.swap(fragment, OfflineFragment::class.java, underMiniPlayer = true) {
+                !isServerReachable(hostname)
+            }
         }
     }
 

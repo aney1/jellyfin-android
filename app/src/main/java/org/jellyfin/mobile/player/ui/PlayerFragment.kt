@@ -88,7 +88,8 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
      * Whether the player is currently shrunk into the in-app floating mini player, where the
      * video plays in a corner over the (still-running) web app so it can be navigated.
      */
-    private var isMiniPlayer = false
+    var isMiniPlayer = false
+        private set
 
     /**
      * The layout params used when the player fills the screen, saved so they can be restored
