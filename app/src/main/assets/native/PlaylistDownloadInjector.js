@@ -124,6 +124,11 @@
             status.style.margin = '0.5em 0';
             buttons.insertAdjacentElement('afterend', status);
         }
+        // Line up with the buttons: on narrow layouts they are indented to leave room for the poster
+        const buttonStyle = getComputedStyle(buttons);
+        if (status.style.paddingLeft !== buttonStyle.paddingLeft) status.style.paddingLeft = buttonStyle.paddingLeft;
+        const align = buttonStyle.justifyContent === 'center' ? 'center' : '';
+        if (status.style.textAlign !== align) status.style.textAlign = align;
         const parts = [MODE_LABELS[state.mode] || MODE_LABELS.OFF, `${state.downloaded || 0} of ${state.total || 0} downloaded`];
         if (state.pending) parts.push(`${state.pending} pending`);
         const text = parts.join(' · ');
